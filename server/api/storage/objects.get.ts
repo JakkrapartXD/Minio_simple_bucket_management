@@ -1,0 +1,24 @@
+import { minio } from '../lib/minio'
+
+export default defineEventHandler(async (event) => {
+  const query = getQuery(event)
+  const bucket = typeof query.bucket === 'string' ? query.bucket : undefined
+  const prefix = typeof query.prefix === 'string' ? query.prefix : ''
+
+  if (!bucket) {
+    throw createError({ statusCode: 400, statusMessage: 'bucket required' })
+  }
+
+  const objects: any[] = []
+  const stream = minio.listObjectsV2(bucket, prefix, false)  // false = ใช้ prefix แบบ folder view
+
+  for await (const obj of stream as unknown as AsyncIterable<any>) {
+    objects.push({
+      name: obj.name,
+      size: obj.size,
+      lastModified: obj.lastModified,
+    })
+  }
+
+  return { bucket, prefix, objects }
+})
