@@ -1,0 +1,16 @@
+services:
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-store}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-Store141213}
+    ports:
+      - "9005:9000"
+      - "9006:9001"
+    volumes:
+      - minio_data:/data
+    security_opt:
+      - apparmor:unconfined
+volumes:
+  minio_data:
