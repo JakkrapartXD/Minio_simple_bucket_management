@@ -5,6 +5,14 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
   modules: ['@nuxtjs/tailwindcss'],
+  app: {
+    head: {
+      title: 'MINIO OBJECT STORE',
+      meta: [
+        { name: 'description', content: 'MinIO Object Storage Management' }
+      ]
+    }
+  },
   runtimeConfig: {
     MINIO_ENDPOINT: env.MINIO_ENDPOINT ?? '127.0.0.1',
     MINIO_PORT: env.MINIO_PORT ?? '9000',
