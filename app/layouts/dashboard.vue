@@ -19,7 +19,7 @@
           <button
             class="w-full inline-flex items-center gap-3 rounded-lg bg-[#8D6E63] hover:bg-[#A1887F] text-white font-medium px-3 py-2 text-sm transition-colors shadow-md hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
             :disabled="creatingBucket"
-            @click="promptCreateBucket"
+            @click="showCreateBucketModal = true"
           >
             <span class="text-lg">+</span>
             Create Bucket
@@ -78,6 +78,69 @@
       </main>
     </div>
 
+    <!-- Create Bucket Modal -->
+    <div 
+      v-if="showCreateBucketModal"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      @click.self="showCreateBucketModal = false"
+    >
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <h3 class="text-lg font-semibold flex items-center gap-2">
+            <span class="text-2xl">🪣</span>
+            Create New Bucket
+          </h3>
+          <button
+            class="text-gray-400 hover:text-gray-600 transition-colors"
+            @click="showCreateBucketModal = false"
+          >
+            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="px-6 py-4 space-y-4">
+          <div>
+            <label class="text-sm font-medium text-gray-700 mb-1 block">
+              Bucket Name <span class="text-red-500">*</span>
+            </label>
+            <input
+              v-model="newBucketName"
+              type="text"
+              placeholder="Enter bucket name (3-63 characters)"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#8D6E63]"
+              @keyup.enter="handleCreateBucketSubmit"
+            />
+            <!-- <p class="text-xs text-gray-500 mt-1">
+              Use 3-63 lowercase letters, numbers, dots, or hyphens. Must start and end with a letter or number.
+            </p> -->
+            <p v-if="bucketNameError" class="text-xs text-red-500 mt-1">
+              {{ bucketNameError }}
+            </p>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-200">
+          <button
+            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            @click="handleClearBucketName"
+          >
+            Clear
+          </button>
+          <button
+            class="px-4 py-2 text-sm font-medium text-white bg-[#8D6E63] rounded-md hover:bg-[#A1887F] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="creatingBucket || !newBucketName.trim()"
+            @click="handleCreateBucketSubmit"
+          >
+            {{ creatingBucket ? 'Creating...' : 'Create' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </template>
   
   <script setup lang="ts">
@@ -86,6 +149,9 @@
 
   const search = ref('')
   const creatingBucket = ref(false)
+  const showCreateBucketModal = ref(false)
+  const newBucketName = ref('')
+  const bucketNameError = ref('')
 
   const selectedBucket = computed(() => route.params.bucket as string | undefined)
 
@@ -139,34 +205,53 @@
     return null
   }
 
-  const promptCreateBucket = () => {
+  const handleCreateBucketSubmit = async () => {
     if (creatingBucket.value) return
-    const name = window.prompt('New bucket name')
+    
+    const name = newBucketName.value.trim()
     if (!name) {
+      bucketNameError.value = 'Bucket name is required'
       return
     }
+
     const error = validateBucketName(name)
     if (error) {
-      window.alert(error)
+      bucketNameError.value = error
       return
     }
-    handleCreateBucket(name)
-  }
 
-  const handleCreateBucket = async (name: string) => {
+    bucketNameError.value = ''
     creatingBucket.value = true
+    
     try {
       await $fetch('/api/storage/bucket.create', {
         method: 'POST',
-        body: { name: name.trim().toLowerCase() },
+        body: { name: name.toLowerCase() },
       })
       await refreshBuckets()
+      showCreateBucketModal.value = false
+      newBucketName.value = ''
+      
+      // Navigate to the new bucket
+      router.push(`/storage/${encodeURIComponent(name.toLowerCase())}`)
     } catch (err: any) {
-      window.alert(err?.data?.message || err?.message || 'Failed to create bucket')
+      bucketNameError.value = err?.data?.message || err?.message || 'Failed to create bucket'
     } finally {
       creatingBucket.value = false
     }
   }
+
+  const handleClearBucketName = () => {
+    newBucketName.value = ''
+    bucketNameError.value = ''
+  }
+
+  // Watch for input changes to clear error
+  watch(newBucketName, () => {
+    if (bucketNameError.value) {
+      bucketNameError.value = ''
+    }
+  })
   </script>
   
   <style scoped>

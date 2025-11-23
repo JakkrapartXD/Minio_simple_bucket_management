@@ -12,12 +12,37 @@
           </p>
         </div>
         <div class="flex items-center gap-3">
-          <UButton variant="outline" color="neutral" icon="i-heroicons-arrow-path" @click="handleRefresh">
+          <UButton variant="outline" color="neutral" icon="i-heroicons-arrow-path" @click="handleRefresh" class="cursor-pointer">
             Refresh
           </UButton>
-          <UButton color="primary" icon="i-heroicons-arrow-up-tray" @click="triggerUpload">
-            Upload
-          </UButton>
+          <div ref="uploadMenuRef" class="relative cursor-pointer">
+            <UButton 
+              color="primary" 
+              icon="i-heroicons-arrow-up-tray" 
+              @click.stop="toggleUploadMenu"
+            >
+              Upload
+            </UButton>
+            <div 
+              v-if="showUploadMenu" 
+              class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden"
+            >
+              <button
+                class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+                @click="triggerFileUpload"
+              >
+                <UIcon name="i-heroicons-arrow-up-tray" class="h-5 w-5 text-[#8D6E63]" />
+                <span class="text-sm text-[#2C2A26]">Upload File</span>
+              </button>
+              <button
+                class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors border-t border-gray-100"
+                @click="triggerFolderUpload"
+              >
+                <UIcon name="i-heroicons-folder" class="h-5 w-5 text-[#8D6E63]" />
+                <span class="text-sm text-[#2C2A26]">Upload Folder</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -35,38 +60,53 @@
         </div>
       </div>
 
-      <div class="rounded-2xl bg-white p-5 shadow-lg">
-        <div class="flex items-center justify-between border-b border-gray-100 pb-4">
-          <div class="flex items-center gap-2 text-sm text-gray-500">
+      <div 
+        ref="dropzoneRef"
+        class="rounded-2xl bg-white p-5 shadow-lg transition-all relative"
+          :class="{ 'border-2 border-dashed border-green-500 bg-green-50/50': isDraggingOver }"
+          @dragover.prevent="handleDragOver"
+          @dragleave.prevent="handleDragLeave"
+          @drop.prevent="handleDrop"
+        >
+          <div class="flex items-center justify-between border-b border-gray-100 pb-4">
+          <div class="flex items-center gap-1 text-sm text-gray-500">
             <button
-              class="text-[#8D6E63] hover:underline"
+              class="text-[#8D6E63] hover:underline cursor-pointer px-2 py-1 rounded hover:bg-gray-100 transition-colors"
               @click="handleNavigate('')"
             >
               {{ selectedBucket || 'Bucket' }}
             </button>
-            <UIcon
-              v-for="(crumb, index) in breadcrumbs"
-              :key="crumb.value"
-              name="i-heroicons-chevron-right-20-solid"
-              class="h-4 w-4 text-gray-400"
-              v-show="index < breadcrumbs.length"
-            />
-            <button
-              v-for="(crumb, index) in breadcrumbs"
-              :key="crumb.value"
-              class="text-[#8D6E63] hover:underline"
-              @click="handleNavigate(crumb.value)"
-            >
-              {{ crumb.label }}
-            </button>
+            <template v-for="(crumb, index) in breadcrumbs" :key="crumb.value">
+              <span class="text-gray-400 px-1">/</span>
+              <button
+                class="text-[#8D6E63] hover:underline cursor-pointer px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+                @click="handleNavigate(crumb.value)"
+              >
+                {{ crumb.label }}
+              </button>
+            </template>
           </div>
           <div class="flex items-center gap-2">
-            <UButton variant="ghost" icon="i-heroicons-arrow-uturn-left" @click="handleNavigate(backPrefix)">
+            <!-- <UButton variant="ghost" icon="i-heroicons-arrow-uturn-left" @click="handleNavigate(backPrefix)">
               Back
             </UButton>
             <UButton variant="ghost" icon="i-heroicons-arrow-uturn-right" @click="handleNavigate(forwardPrefix)">
               Forward
+            </UButton> -->
+            <UButton variant="outline" icon="i-heroicons-folder-plus" @click="showCreatePathModal = true">
+              Create new path
             </UButton>
+          </div>
+        </div>
+
+        <!-- Drag overlay -->
+        <div 
+          v-if="isDraggingOver"
+          class="absolute inset-0 bg-green-500/10 border-2 border-dashed border-green-500 rounded-2xl flex items-center justify-center z-10 pointer-events-none"
+        >
+          <div class="text-center">
+            <UIcon name="i-heroicons-arrow-up-tray" class="h-12 w-12 text-green-500 mx-auto mb-2" />
+            <p class="text-green-600 font-medium">Drop files or folders here to upload</p>
           </div>
         </div>
 
@@ -83,7 +123,7 @@
               <tr
                 v-for="folder in filteredFolders"
                 :key="folder.path"
-                class="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
+                class="border-b border-gray-50 hover:bg-gray-100 cursor-pointer transition-colors"
                 @click="handleNavigate(folder.path)"
               >
                 <td class="px-4 py-3" >
@@ -98,7 +138,9 @@
               <tr
                 v-for="object in filteredObjects"
                 :key="object.name"
-                class="border-b border-gray-50 hover:bg-gray-50"
+                class="border-b border-gray-50 hover:bg-gray-100 cursor-pointer transition-colors"
+                :class="{ 'bg-blue-50': selectedObject?.name === object.name }"
+                @click="handleSelectObject(object)"
               >
                 <td class="px-4 py-3">
                   <div class="flex items-center gap-3">
@@ -124,6 +166,111 @@
       </div>
 
       <input ref="fileInput" type="file" class="hidden" multiple @change="handleUpload" />
+      <input ref="folderInput" type="file" class="hidden" webkitdirectory @change="handleUpload" />
+    </div>
+
+    <!-- Object Preview & Details Modal -->
+    <div 
+      v-if="selectedObject"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      @click.self="selectedObject = null"
+    >
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-6xl h-[90vh] flex flex-col">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <h3 class="text-lg font-semibold text-[#2C2A26] truncate">
+            {{ selectedObject.name }}
+          </h3>
+          <button
+            class="text-gray-400 hover:text-gray-600 transition-colors"
+            @click="selectedObject = null"
+          >
+            <UIcon name="i-heroicons-x-mark" class="h-6 w-6" />
+          </button>
+        </div>
+
+        <!-- Content: Preview (Left) + Detail (Right) -->
+        <div class="flex-1 flex overflow-hidden">
+          <!-- Preview Panel (Left) -->
+          <div class="w-2/3 border-r border-gray-200 p-6 overflow-auto">
+            <h4 class="text-sm font-semibold text-[#2C2A26] mb-4">Preview</h4>
+            <div class="h-full flex items-center justify-center">
+              <ObjectPreview
+                v-if="selectedObjectInfo"
+                :bucket="selectedBucket || ''"
+                :object-name="selectedObject.name"
+                :content-type="selectedObjectInfo.contentType"
+              />
+              <div v-else class="text-gray-500">Loading...</div>
+            </div>
+          </div>
+
+          <!-- Detail Panel (Right) -->
+          <div class="w-1/3 p-6 overflow-auto">
+            <ObjectDetails
+              :bucket="selectedBucket || ''"
+              :object-name="selectedObject.name"
+              :object-info="selectedObjectInfo"
+              @deleted="handleObjectDeleted"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Create New Path Modal -->
+    <div 
+      v-if="showCreatePathModal"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      @click.self="showCreatePathModal = false"
+    >
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <h3 class="text-lg font-semibold flex items-center gap-2">
+            <UIcon name="i-heroicons-folder-plus" class="h-5 w-5 text-green-600" />
+            Choose or create a new path
+          </h3>
+          <button
+            class="text-gray-400 hover:text-gray-600 transition-colors"
+            @click="showCreatePathModal = false"
+          >
+            <UIcon name="i-heroicons-x-mark" class="h-5 w-5" />
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="px-6 py-4 space-y-4">
+          <div>
+            <label class="text-sm font-medium text-gray-700 mb-1 block">Current Path:</label>
+            <div class="text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded">
+              {{ selectedBucket }}{{ prefix ? ' / ' + prefix.replace(/\/$/, '') : '' }}
+            </div>
+          </div>
+
+          <div>
+            <label class="text-sm font-medium text-gray-700 mb-1 block">
+              New Folder Path <span class="text-red-500">*</span>
+            </label>
+            <input
+              v-model="newPathInput"
+              type="text"
+              placeholder="Enter the new Folder Path"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+              @keyup.enter="handleCreatePath"
+            />
+            <p class="text-xs text-gray-500 mt-1">
+              Enter folder name (e.g., "newfolder" or "folder/subfolder")
+            </p>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-200">
+          <UButton variant="outline" @click="handleClearPath">Clear</UButton>
+          <UButton color="primary" @click="handleCreatePath">Create</UButton>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -149,6 +296,16 @@ const router = useRouter()
 const prefix = ref<string>((route.query.prefix as string) ?? '')
 const objectSearch = ref('')
 const fileInput = ref<HTMLInputElement>()
+const folderInput = ref<HTMLInputElement>()
+const showUploadMenu = ref(false)
+const uploadMenuRef = ref<HTMLElement>()
+const dropzoneRef = ref<HTMLElement>()
+const isDraggingOver = ref(false)
+const showCreatePathModal = ref(false)
+const newPathInput = ref('')
+const selectedObject = ref<ObjectEntry | null>(null)
+const selectedObjectInfo = ref<any>(null)
+const loadingObjectInfo = ref(false)
 
 const selectedBucket = computed(() => route.params.bucket as string | undefined)
 
@@ -217,7 +374,12 @@ const folders = computed(() =>
   })),
 )
 
-const objects = computed(() => objectData.value?.objects ?? [])
+const objects = computed(() => {
+  // Filter เอา objects ที่ไม่มี name หรือ size เป็น 0 ออก
+  return (objectData.value?.objects ?? []).filter((object) => {
+    return object.name && object.size > 0
+  })
+})
 
 const filteredObjects = computed(() => {
   if (!objectSearch.value) {
@@ -270,6 +432,66 @@ const handleSelectBucket = (name: string) => {
 
 const handleNavigate = (nextPrefix: string) => {
   router.replace({ query: { prefix: nextPrefix } })
+  selectedObject.value = null // Clear selection when navigating
+}
+
+const handleSelectObject = async (object: ObjectEntry) => {
+  selectedObject.value = object
+  loadingObjectInfo.value = true
+  selectedObjectInfo.value = null
+
+  try {
+    const info = await $fetch('/api/storage/object.info', {
+      params: {
+        bucket: selectedBucket.value,
+        objectName: object.name,
+      },
+    })
+    selectedObjectInfo.value = info
+  } catch (error: any) {
+    console.error('Failed to load object info:', error)
+    // Still show basic info from object list
+    selectedObjectInfo.value = {
+      name: object.name,
+      size: object.size,
+      lastModified: object.lastModified,
+    }
+  } finally {
+    loadingObjectInfo.value = false
+  }
+}
+
+const handleObjectDeleted = async () => {
+  selectedObject.value = null
+  selectedObjectInfo.value = null
+  await Promise.all([refreshObjects(), refreshFolders()])
+}
+
+const handleCreatePath = () => {
+  if (!newPathInput.value.trim()) {
+    window.alert('Please enter a folder path')
+    return
+  }
+
+  // สร้าง path ใหม่โดยรวมกับ prefix ปัจจุบัน
+  let newPath = newPathInput.value.trim()
+  
+  // ลบ leading/trailing slashes
+  newPath = newPath.replace(/^\/+|\/+$/g, '')
+  
+  // รวมกับ prefix ปัจจุบัน
+  const fullPath = prefix.value + newPath + '/'
+  
+  // Navigate ไปที่ path ใหม่ (ยังไม่มีการสร้างจริง)
+  handleNavigate(fullPath)
+  
+  // ปิด modal และ clear input
+  showCreatePathModal.value = false
+  newPathInput.value = ''
+}
+
+const handleClearPath = () => {
+  newPathInput.value = ''
 }
 
 const objectDisplayName = (name?: string) => {
@@ -286,32 +508,224 @@ const formatSize = (size: number) => {
 
 const formatDate = (value: string) => new Date(value).toLocaleString()
 
-const triggerUpload = () => {
+const toggleUploadMenu = () => {
+  showUploadMenu.value = !showUploadMenu.value
+}
+
+const triggerFileUpload = () => {
+  showUploadMenu.value = false
   fileInput.value?.click()
 }
+
+const triggerFolderUpload = () => {
+  showUploadMenu.value = false
+  folderInput.value?.click()
+}
+
+// ปิดเมนูเมื่อคลิกข้างนอก
+onMounted(() => {
+  const handleClickOutside = (event: MouseEvent) => {
+    const target = event.target as HTMLElement
+    if (uploadMenuRef.value && !uploadMenuRef.value.contains(target)) {
+      showUploadMenu.value = false
+    }
+  }
+  document.addEventListener('click', handleClickOutside)
+  onUnmounted(() => {
+    document.removeEventListener('click', handleClickOutside)
+  })
+})
 
 const handleUpload = async (event: Event) => {
   const target = event.target as HTMLInputElement
   const files = target.files
   if (!files || !files.length || !selectedBucket.value) return
+  await uploadFiles(files)
+  target.value = ''
+}
+
+const uploadFiles = async (files: FileList | File[]) => {
+  if (!files || !files.length || !selectedBucket.value) return
 
   const formData = new FormData()
   Array.from(files).forEach((file) => {
-    formData.append('files', file, file.name)
+    // ใช้ webkitRelativePath สำหรับโฟลเดอร์ หรือ file.name สำหรับไฟล์เดี่ยว
+    // webkitRelativePath จะมี path แบบ "folder1/ของ1.txt" เมื่ออัพโหลดโฟลเดอร์
+    const fileName = (file as any).webkitRelativePath || file.name
+    // ใช้ field name 'files' และส่ง filename เป็น parameter ที่ 3
+    formData.append('files', file, fileName)
   })
 
-  await $fetch('/api/storage/upload', {
-    method: 'POST',
-    body: formData,
-    params: { bucket: selectedBucket.value, prefix: prefix.value },
+  try {
+    await $fetch('/api/storage/upload', {
+      method: 'POST',
+      body: formData,
+      params: { 
+        bucket: selectedBucket.value, 
+        prefix: prefix.value || '' 
+      },
+    })
+    window.alert('Upload complete')
+    await Promise.all([refreshObjects(), refreshFolders()])
+  } catch (error: any) {
+    console.error('Upload error:', error)
+    const errorMessage = error?.data?.message || error?.message || 'Unknown error'
+    window.alert('Upload failed: ' + errorMessage)
+  }
+}
+
+const handleDragOver = (event: DragEvent) => {
+  event.preventDefault()
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'copy'
+  }
+  isDraggingOver.value = true
+}
+
+const handleDragLeave = (event: DragEvent) => {
+  event.preventDefault()
+  // ตรวจสอบว่า mouse ยังอยู่ใน dropzone หรือไม่
+  const relatedTarget = event.relatedTarget as HTMLElement
+  if (!dropzoneRef.value?.contains(relatedTarget)) {
+    isDraggingOver.value = false
+  }
+}
+
+// ฟังก์ชันสำหรับอ่านไฟล์ทั้งหมดจาก directory entry
+const readDirectoryEntry = (entry: FileSystemEntry, basePath: string = ''): Promise<Array<{ file: File; path: string }>> => {
+  return new Promise((resolve, reject) => {
+    if (entry.isFile) {
+      const fileEntry = entry as FileSystemFileEntry
+      fileEntry.file((file) => {
+        // สร้าง File ใหม่ที่มีชื่อไฟล์ที่ถูกต้อง (ไม่ใช้ path จาก file.name เดิม)
+        // ใช้แค่ชื่อไฟล์สุดท้ายเท่านั้น
+        const fileNameOnly = file.name.split('/').pop() || file.name.split('\\').pop() || file.name
+        const relativePath = basePath ? `${basePath}/${fileNameOnly}` : fileNameOnly
+        
+        // สร้าง File ใหม่ที่มีชื่อที่ถูกต้อง
+        const newFile = new File([file], fileNameOnly, { type: file.type, lastModified: file.lastModified })
+        resolve([{ file: newFile, path: relativePath }])
+      }, reject)
+    } else if (entry.isDirectory) {
+      const dirEntry = entry as FileSystemDirectoryEntry
+      const reader = dirEntry.createReader()
+      const files: Array<{ file: File; path: string }> = []
+
+      const readEntries = () => {
+        reader.readEntries((entries) => {
+          if (entries.length === 0) {
+            resolve(files)
+            return
+          }
+
+          const promises = entries.map((entry) => {
+            // เพิ่มชื่อเข้า basePath เฉพาะ directory เท่านั้น ไม่ใช่ไฟล์
+            if (entry.isDirectory) {
+              const entryNameOnly = entry.name.split('/').pop() || entry.name.split('\\').pop() || entry.name
+              const newBasePath = basePath ? `${basePath}/${entryNameOnly}` : entryNameOnly
+              return readDirectoryEntry(entry, newBasePath)
+            } else {
+              // ถ้าเป็นไฟล์ ให้ส่ง basePath เดิม ไม่ต้องเพิ่มชื่อไฟล์
+              return readDirectoryEntry(entry, basePath)
+            }
+          })
+
+          Promise.all(promises).then((results) => {
+            files.push(...results.flat())
+            readEntries() // อ่านต่อ
+          }).catch(reject)
+        }, reject)
+      }
+
+      readEntries()
+    } else {
+      resolve([])
+    }
   })
-  window.alert('Upload complete')
-  target.value = ''
-  await Promise.all([refreshObjects(), refreshFolders()])
+}
+
+const handleDrop = async (event: DragEvent) => {
+  event.preventDefault()
+  event.stopPropagation()
+  isDraggingOver.value = false
+
+  if (!event.dataTransfer) return
+
+  const items = event.dataTransfer.items
+  const files = event.dataTransfer.files
+
+  // ตรวจสอบว่าเป็น directory หรือไม่
+  if (items && items.length > 0) {
+    try {
+      const entries: FileSystemEntry[] = []
+      
+      // อ่าน entries ทั้งหมด
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i]
+        if (item && item.kind === 'file') {
+          const entry = item.webkitGetAsEntry()
+          if (entry) {
+            entries.push(entry)
+          }
+        }
+      }
+
+      // ถ้ามี directory ให้อ่านโครงสร้างและอัพโหลด
+      const hasDirectory = entries.some(e => e.isDirectory)
+      if (hasDirectory) {
+        // อ่านไฟล์ทั้งหมดจาก directory
+        const allFiles: Array<{ file: File; path: string }> = []
+        
+        for (const entry of entries) {
+          // ใช้แค่ชื่อโฟลเดอร์เท่านั้น (ไม่ใช้ path จาก entry.name)
+          // entry.name อาจจะเป็น "Foldername" หรือ "C:\path\to\Foldername" 
+          const folderNameOnly = entry.name.split('/').pop() || entry.name.split('\\').pop() || entry.name
+          const files = await readDirectoryEntry(entry, folderNameOnly)
+          allFiles.push(...files)
+        }
+
+        if (allFiles.length > 0) {
+          // สร้าง FormData และอัพโหลด
+          const formData = new FormData()
+          allFiles.forEach(({ file, path }) => {
+            // ใช้ path ที่เราสร้างเองเป็น filename (parameter ที่ 3)
+            // path จะเป็น "Foldername/1.txt" ไม่ใช่ "Foldername/1.txt/1.txt"
+            formData.append('files', file, path)
+          })
+
+          try {
+            await $fetch('/api/storage/upload', {
+              method: 'POST',
+              body: formData,
+              params: { 
+                bucket: selectedBucket.value, 
+                prefix: prefix.value || '' 
+              },
+            })
+            window.alert(`Upload complete: ${allFiles.length} file(s) uploaded`)
+            await Promise.all([refreshObjects(), refreshFolders()])
+          } catch (error: any) {
+            console.error('Upload error:', error)
+            const errorMessage = error?.data?.message || error?.message || 'Unknown error'
+            window.alert('Upload failed: ' + errorMessage)
+          }
+        }
+        return
+      }
+    } catch (e) {
+      // ถ้าไม่สามารถอ่าน directory ได้ ให้ลองอัพโหลดไฟล์ธรรมดา
+      console.warn('Could not read directory structure:', e)
+    }
+  }
+
+  // ถ้าเป็นไฟล์ธรรมดา
+  if (files && files.length > 0) {
+    await uploadFiles(files)
+  }
 }
 
 const handleRefresh = async () => {
   await Promise.all([refreshObjects(), refreshFolders()])
-  window.alert('Refreshed')
+  // window.alert('Refreshed')
 }
 </script>

@@ -354,6 +354,82 @@ export default defineEventHandler(() => {
           },
         },
       },
+      '/api/storage/share': {
+        get: {
+          summary: 'Generate presigned URL for sharing object',
+          description: 'Generate a presigned URL that allows temporary access to an object without authentication. The URL expires after the specified time.',
+          tags: ['Storage'],
+          parameters: [
+            {
+              name: 'bucket',
+              in: 'query',
+              required: true,
+              schema: { type: 'string' },
+              description: 'Bucket name',
+              example: 'my-bucket',
+            },
+            {
+              name: 'objectName',
+              in: 'query',
+              required: true,
+              schema: { type: 'string' },
+              description: 'Object name (file path)',
+              example: 'images/photo.jpg',
+            },
+            {
+              name: 'expiresIn',
+              in: 'query',
+              required: false,
+              schema: { type: 'integer', default: 86400 },
+              description: 'Expiration time in seconds (default: 86400 = 24 hours, max: 604800 = 7 days)',
+              example: 86400,
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'Presigned URL generated successfully',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      url: {
+                        type: 'string',
+                        format: 'uri',
+                        description: 'Presigned URL for accessing the object',
+                        example: 'http://127.0.0.1:9000/my-bucket/images/photo.jpg?X-Amz-Algorithm=...',
+                      },
+                      bucket: { type: 'string', example: 'my-bucket' },
+                      objectName: { type: 'string', example: 'images/photo.jpg' },
+                      expiresIn: { type: 'integer', description: 'Expiration time in seconds', example: 86400 },
+                      expiresAt: {
+                        type: 'string',
+                        format: 'date-time',
+                        description: 'ISO 8601 timestamp when the URL expires',
+                        example: '2025-11-24T13:10:53.587Z',
+                      },
+                      expiresAtFormatted: {
+                        type: 'string',
+                        description: 'Human-readable expiration date',
+                        example: '11/24/2025, 1:10:53 PM',
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            '400': {
+              description: 'Bad request - bucket and objectName required, or invalid expiresIn',
+            },
+            '404': {
+              description: 'Object not found',
+            },
+            '500': {
+              description: 'Internal server error',
+            },
+          },
+        },
+      },
     },
     tags: [
       {

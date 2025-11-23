@@ -16,11 +16,26 @@ export default defineEventHandler(async (event) => {
   const results: any[] = []
 
   for (const file of form) {
+    if (!file.filename) {
+      continue // Skip if no filename
+    }
 
     // รับ path จาก HTML input folder
-    // file.filename ตัวอย่าง: "images/2024/test1.jpg"
+    // file.filename ตัวอย่าง: "images/2024/test1.jpg" หรือ "folder1/ของ1.txt"
     // prefix (optional) เช่น "uploads/"
-    const objectName = prefix + file.filename
+    // รองรับการอัพโหลดโฟลเดอร์ - filename จะมี path แบบ relative เช่น "folder1/ของ1.txt"
+    let objectName = file.filename
+    
+    // Normalize path separators (handle both / and \)
+    objectName = objectName.replace(/\\/g, '/')
+    
+    // Remove leading slash if present
+    if (objectName.startsWith('/')) {
+      objectName = objectName.substring(1)
+    }
+    
+    // Combine with prefix
+    objectName = prefix + objectName
 
     await minio.putObject(
       bucket,

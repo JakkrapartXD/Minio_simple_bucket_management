@@ -13,11 +13,14 @@ export default defineEventHandler(async (event) => {
   const stream = minio.listObjectsV2(bucket, prefix, false)  // false = ใช้ prefix แบบ folder view
 
   for await (const obj of stream as unknown as AsyncIterable<any>) {
-    objects.push({
-      name: obj.name,
-      size: obj.size,
-      lastModified: obj.lastModified,
-    })
+    // Filter เอา objects ที่ไม่มี name หรือ size เป็น 0 ออก
+    if (obj.name && obj.size > 0) {
+      objects.push({
+        name: obj.name,
+        size: obj.size,
+        lastModified: obj.lastModified,
+      })
+    }
   }
 
   return { bucket, prefix, objects }
