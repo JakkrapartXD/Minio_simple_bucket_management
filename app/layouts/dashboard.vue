@@ -49,7 +49,7 @@
             No buckets found
           </div>
           <ul v-else class="space-y-1">
-            <li v-for="bucket in filteredBuckets" :key="bucket.name">
+            <li v-for="bucket in filteredBuckets" :key="bucket.name" class="group relative">
               <button
                 class="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition truncate"
                 :class="bucket.name === selectedBucket
@@ -57,7 +57,17 @@
                   : 'text-[#D7CCC8] hover:bg-[#6D4C41]/60 hover:text-white'"
                 @click="handleSelectBucket(bucket.name)"
               >
-                🪣 <span class="truncate">{{ bucket.name }}</span>
+                🪣 <span class="truncate flex-1 text-left">{{ bucket.name }}</span>
+              </button>
+              <button
+                class="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 px-2 py-1 rounded text-xs transition-opacity"
+                :class="bucket.name === selectedBucket
+                  ? 'text-white hover:bg-[#5D4037]'
+                  : 'text-[#D7CCC8] hover:bg-[#6D4C41]/80'"
+                @click.stop="handleEditBucket(bucket.name)"
+                title="Edit Bucket"
+              >
+                <Icon name="pepicons-pencil:pen" class="h-4 w-4" />
               </button>
             </li>
           </ul>
@@ -76,6 +86,153 @@
       <main class="flex-1 bg-[#EFE7DD]">
         <NuxtPage />
       </main>
+    </div>
+
+    <!-- Edit Bucket Modal -->
+    <div 
+      v-if="showEditBucketModal && editingBucket"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      @click.self="showEditBucketModal = false"
+    >
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+          <h3 class="text-lg font-semibold flex items-center gap-2">
+            <UIcon name="i-heroicons-cog-6-tooth" class="h-5 w-5 text-[#8D6E63]" />
+            Edit Bucket: {{ editingBucket }}
+          </h3>
+          <button
+            class="text-gray-400 hover:text-gray-600 transition-colors"
+            @click="showEditBucketModal = false"
+          >
+            <UIcon name="i-heroicons-x-mark" class="h-5 w-5" />
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="px-6 py-4 space-y-4">
+          <!-- Privacy Policy -->
+          <div>
+            <label class="text-sm font-medium text-gray-700 mb-2 block">
+              Privacy Policy
+            </label>
+            <select
+              v-model="bucketPolicy"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#8D6E63]"
+              :disabled="loadingBucketPolicy"
+            >
+              <option value="private">Private</option>
+              <option value="public-read">Public Read</option>
+              <option value="authenticated-read">Authenticated Read</option>
+            </select>
+            <p class="text-xs text-gray-500 mt-1">
+              <span v-if="bucketPolicy === 'private'">Only you can access this bucket</span>
+              <span v-else-if="bucketPolicy === 'public-read'">Anyone can read objects in this bucket</span>
+              <span v-else-if="bucketPolicy === 'authenticated-read'">Only authenticated users can read objects</span>
+            </p>
+          </div>
+
+          <!-- Delete Bucket Section -->
+          <div class="pt-4 border-t border-gray-200">
+            <h4 class="text-sm font-medium text-red-600 mb-2">Danger Zone</h4>
+            <button
+              class="w-full px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="deletingBucket"
+              @click="showDeleteConfirm = true"
+            >
+              <UIcon name="i-heroicons-trash" class="h-4 w-4 inline-block mr-2" />
+              Delete Bucket
+            </button>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-200">
+          <button
+            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            @click="showEditBucketModal = false"
+          >
+            Cancel
+          </button>
+          <button
+            class="px-4 py-2 text-sm font-medium text-white bg-[#8D6E63] rounded-md hover:bg-[#A1887F] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="savingPolicy || bucketPolicy === currentBucketPolicy"
+            @click="handleSavePolicy"
+          >
+            {{ savingPolicy ? 'Saving...' : 'Save Changes' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Bucket Confirmation Modal -->
+    <div 
+      v-if="showDeleteConfirm && editingBucket"
+      class="fixed inset-0 z-[60] flex items-center justify-center bg-black/50"
+      @click.self="showDeleteConfirm = false"
+    >
+      <div class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-red-200 bg-red-50">
+          <h3 class="text-lg font-semibold text-red-600 flex items-center gap-2">
+            <UIcon name="i-heroicons-exclamation-triangle" class="h-5 w-5" />
+            Delete Bucket
+          </h3>
+          <button
+            class="text-gray-400 hover:text-gray-600 transition-colors"
+            @click="showDeleteConfirm = false"
+          >
+            <UIcon name="i-heroicons-x-mark" class="h-5 w-5" />
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="px-6 py-4 space-y-4">
+          <div v-if="loadingBucketStats" class="text-sm text-gray-600">
+            Loading bucket information...
+          </div>
+          <div v-else>
+            <p class="text-sm text-gray-700 mb-4">
+              Are you sure you want to delete bucket <strong>"{{ editingBucket }}"</strong>?
+            </p>
+            <div class="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-4">
+              <p class="text-sm text-yellow-800">
+                ⚠️ This bucket contains <strong>{{ bucketObjectCount }}</strong> object{{ bucketObjectCount !== 1 ? 's' : '' }}.
+                All objects will be permanently deleted.
+              </p>
+            </div>
+            <div>
+              <label class="text-sm font-medium text-gray-700 mb-1 block">
+                Type the bucket name to confirm deletion:
+              </label>
+              <input
+                v-model="deleteBucketConfirm"
+                type="text"
+                placeholder="Enter bucket name"
+                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                @keyup.enter="deleteBucketConfirm === editingBucket && handleDeleteBucket()"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="flex justify-end gap-2 px-6 py-4 border-t border-gray-200">
+          <button
+            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            @click="showDeleteConfirm = false; deleteBucketConfirm = ''"
+          >
+            Cancel
+          </button>
+          <button
+            class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="deletingBucket || deleteBucketConfirm !== editingBucket"
+            @click="handleDeleteBucket"
+          >
+            {{ deletingBucket ? 'Deleting...' : 'Delete Bucket' }}
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Create Bucket Modal -->
@@ -152,6 +309,21 @@
   const showCreateBucketModal = ref(false)
   const newBucketName = ref('')
   const bucketNameError = ref('')
+  
+  // Edit bucket modal
+  const showEditBucketModal = ref(false)
+  const editingBucket = ref<string | null>(null)
+  const bucketPolicy = ref<'private' | 'public-read' | 'authenticated-read'>('private')
+  const currentBucketPolicy = ref<'private' | 'public-read' | 'authenticated-read'>('private')
+  const loadingBucketPolicy = ref(false)
+  const savingPolicy = ref(false)
+  
+  // Delete bucket
+  const showDeleteConfirm = ref(false)
+  const deletingBucket = ref(false)
+  const deleteBucketConfirm = ref('')
+  const bucketObjectCount = ref(0)
+  const loadingBucketStats = ref(false)
 
   const selectedBucket = computed(() => route.params.bucket as string | undefined)
 
@@ -176,7 +348,7 @@
       }
     }
   })
-
+  
   const filteredBuckets = computed(() => {
     const q = search.value.toLowerCase()
     if (!q) return buckets.value
@@ -250,6 +422,141 @@
   watch(newBucketName, () => {
     if (bucketNameError.value) {
       bucketNameError.value = ''
+    }
+  })
+
+  // Edit bucket functions
+  const handleEditBucket = async (bucketName: string) => {
+    editingBucket.value = bucketName
+    showEditBucketModal.value = true
+    loadingBucketPolicy.value = true
+    
+    try {
+      // Load current policy
+      const policyResponse = await $fetch('/api/storage/bucket.policy', {
+        params: { bucket: bucketName }
+      })
+      const policyType = policyResponse.policyType as 'private' | 'public-read' | 'authenticated-read'
+      bucketPolicy.value = policyType || 'private'
+      currentBucketPolicy.value = policyType || 'private'
+    } catch (error: any) {
+      console.error('Failed to load bucket policy:', error)
+      bucketPolicy.value = 'private'
+      currentBucketPolicy.value = 'private'
+    } finally {
+      loadingBucketPolicy.value = false
+    }
+  }
+
+  const handleSavePolicy = async () => {
+    if (!editingBucket.value || savingPolicy.value) return
+    
+    savingPolicy.value = true
+    try {
+      await $fetch('/api/storage/bucket.policy', {
+        method: 'POST',
+        body: {
+          bucket: editingBucket.value,
+          policy: bucketPolicy.value
+        }
+      })
+      currentBucketPolicy.value = bucketPolicy.value
+      
+      // Close modal first
+      showEditBucketModal.value = false
+      
+      // If we're currently viewing the bucket that was updated, reload the page to refresh policy
+      if (selectedBucket.value === editingBucket.value) {
+        setTimeout(() => {
+          window.location.reload()
+        }, 300) // Small delay to close modal first
+      }
+      
+      window.alert('Bucket policy updated successfully!')
+    } catch (error: any) {
+      window.alert(`Failed to update policy: ${error?.data?.message || error?.message || 'Unknown error'}`)
+      // Reset to current policy on error
+      bucketPolicy.value = currentBucketPolicy.value
+    } finally {
+      savingPolicy.value = false
+    }
+  }
+
+  const handleDeleteBucket = async () => {
+    if (!editingBucket.value || deleteBucketConfirm.value !== editingBucket.value || deletingBucket.value) {
+      return
+    }
+
+    // Load bucket stats first
+    if (bucketObjectCount.value === 0 && !loadingBucketStats.value) {
+      loadingBucketStats.value = true
+      try {
+        const stats = await $fetch('/api/storage/bucket.stats', {
+          params: { bucket: editingBucket.value }
+        })
+        bucketObjectCount.value = stats.objectCount
+      } catch (error) {
+        console.error('Failed to load bucket stats:', error)
+      } finally {
+        loadingBucketStats.value = false
+      }
+      return // Show stats first, user needs to confirm again
+    }
+
+    deletingBucket.value = true
+    try {
+      await $fetch('/api/storage/bucket.delete', {
+        method: 'POST',
+        body: {
+          bucket: editingBucket.value
+        }
+      })
+      
+      // Refresh buckets list
+      await refreshBuckets()
+      
+      // Close modals
+      showDeleteConfirm.value = false
+      showEditBucketModal.value = false
+      editingBucket.value = null
+      deleteBucketConfirm.value = ''
+      
+      // If deleted bucket was selected, navigate to first bucket
+      const deletedBucketName = editingBucket.value
+      if (selectedBucket.value === deletedBucketName) {
+        const remainingBuckets = buckets.value.filter(b => b.name !== deletedBucketName)
+        const firstBucket = remainingBuckets[0]
+        if (firstBucket) {
+          router.push(`/storage/${encodeURIComponent(firstBucket.name)}`)
+        } else {
+          router.push('/')
+        }
+      }
+      
+      window.alert(`Bucket "${deletedBucketName}" deleted successfully!`)
+    } catch (error: any) {
+      window.alert(`Failed to delete bucket: ${error?.data?.message || error?.message || 'Unknown error'}`)
+    } finally {
+      deletingBucket.value = false
+    }
+  }
+
+  // Watch showDeleteConfirm to load stats when modal opens
+  watch(showDeleteConfirm, async (show) => {
+    if (show && editingBucket.value) {
+      loadingBucketStats.value = true
+      deleteBucketConfirm.value = ''
+      try {
+        const stats = await $fetch('/api/storage/bucket.stats', {
+          params: { bucket: editingBucket.value }
+        })
+        bucketObjectCount.value = stats.objectCount
+      } catch (error: any) {
+        console.error('Failed to load bucket stats:', error)
+        bucketObjectCount.value = 0
+      } finally {
+        loadingBucketStats.value = false
+      }
     }
   })
   </script>

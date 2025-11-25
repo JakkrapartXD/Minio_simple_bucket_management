@@ -8,7 +8,7 @@
             {{ bucketTitle }}
           </h1>
           <p class="text-sm text-[#6D4C41]" v-if="selectedBucket">
-            Created on: {{ createdAtText }} · Access: PRIVATE · {{ summaryText }}
+            Created on: {{ createdAtText }} · Access: {{ bucketAccessText }} · {{ summaryText }}
           </p>
         </div>
         <div class="flex items-center gap-3">
@@ -29,14 +29,14 @@
             >
               <button
                 class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
-                @click="triggerFileUpload"
+                @click="triggerFileUploadFromMenu"
               >
                 <UIcon name="i-heroicons-arrow-up-tray" class="h-5 w-5 text-[#8D6E63]" />
                 <span class="text-sm text-[#2C2A26]">Upload File</span>
               </button>
               <button
                 class="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors border-t border-gray-100"
-                @click="triggerFolderUpload"
+                @click="triggerFolderUploadFromMenu"
               >
                 <UIcon name="i-heroicons-folder" class="h-5 w-5 text-[#8D6E63]" />
                 <span class="text-sm text-[#2C2A26]">Upload Folder</span>
@@ -48,14 +48,33 @@
 
       <div class="rounded-2xl bg-white p-4 shadow-lg">
         <div class="flex flex-wrap items-center gap-4">
-          <div class="flex w-full max-w-xl items-center gap-3 rounded-lg bg-[#F3E6DD] border border-[#E0D2C8] px-3 py-2 text-sm">
-            <UIcon name="i-heroicons-magnifying-glass-20-solid" class="h-4 w-4 text-[#8D6E63]" />
-            <input
-              v-model="objectSearch"
-              type="text"
-              placeholder="Start typing to filter objects in the bucket"
-              class="w-full bg-transparent text-[#5D4037] placeholder:text-[#A1887F] outline-none"
-            />
+          <div class="flex flex-1 items-center gap-4">
+            <div class="flex w-full max-w-xl items-center gap-3 rounded-lg bg-[#F3E6DD] border border-[#E0D2C8] px-3 py-2 text-sm">
+              <UIcon name="i-heroicons-magnifying-glass-20-solid" class="h-4 w-4 text-[#8D6E63]" />
+              <input
+                v-model="objectSearch"
+                type="text"
+                placeholder="Start typing to filter objects in the bucket"
+                class="w-full bg-transparent text-[#5D4037] placeholder:text-[#A1887F] outline-none"
+              />
+            </div>
+            <div v-if="selectedItems.length > 0" class="flex items-center gap-2">
+              <span class="text-sm text-[#5D4037]">{{ selectedItems.length }} selected</span>
+              <UButton
+                color="primary"
+                icon="i-heroicons-arrow-down-tray"
+                @click="handleDownloadSelected"
+              >
+                Download
+              </UButton>
+              <UButton
+                color="error"
+                icon="i-heroicons-trash"
+                @click="handleDeleteSelected"
+              >
+                Delete
+              </UButton>
+            </div>
           </div>
         </div>
       </div>
@@ -114,6 +133,15 @@
           <table class="min-w-full text-sm">
             <thead class="bg-gray-50">
               <tr class="text-left text-gray-500">
+                <th class="px-4 py-3 w-12">
+                  <input
+                    type="checkbox"
+                    :checked="isAllSelected"
+                    :indeterminate="isIndeterminate"
+                    @change="handleSelectAll"
+                    class="cursor-pointer"
+                  />
+                </th>
                 <th class="px-4 py-3 font-medium">Name</th>
                 <th class="px-4 py-3 font-medium">Last Modified</th>
                 <th class="px-4 py-3 font-medium text-right">Size</th>
@@ -123,9 +151,18 @@
               <tr
                 v-for="folder in filteredFolders"
                 :key="folder.path"
-                class="border-b border-gray-50 hover:bg-gray-100 cursor-pointer transition-colors"
-                @click="handleNavigate(folder.path)"
+                class="border-b border-gray-50 hover:bg-gray-100 transition-colors"
+                :class="{ 'bg-blue-50': isFolderSelected(folder.path) }"
+                @click="(e) => !(e.target as HTMLElement).closest('input[type=checkbox]') && handleNavigate(folder.path)"
               >
+                <td class="px-4 py-3" @click.stop>
+                  <input
+                    type="checkbox"
+                    :checked="isFolderSelected(folder.path)"
+                    @change="toggleFolderSelection(folder)"
+                    class="cursor-pointer"
+                  />
+                </td>
                 <td class="px-4 py-3" >
                   <div class="flex items-center gap-3 text-[#5D4037]">
                     <UIcon name="i-heroicons-folder" class="h-5 w-5 text-[#8D6E63]" />
@@ -138,14 +175,22 @@
               <tr
                 v-for="object in filteredObjects"
                 :key="object.name"
-                class="border-b border-gray-50 hover:bg-gray-100 cursor-pointer transition-colors"
-                :class="{ 'bg-blue-50': selectedObject?.name === object.name }"
-                @click="handleSelectObject(object)"
+                class="border-b border-gray-50 hover:bg-gray-100 transition-colors"
+                :class="{ 'bg-blue-50': selectedObject?.name === object.name || isObjectSelected(object.name) }"
+                @click="(e) => !(e.target as HTMLElement).closest('input[type=checkbox]') && handleSelectObject(object)"
               >
+                <td class="px-4 py-3" @click.stop>
+                  <input
+                    type="checkbox"
+                    :checked="isObjectSelected(object.name)"
+                    @change="toggleObjectSelection(object)"
+                    class="cursor-pointer"
+                  />
+                </td>
                 <td class="px-4 py-3">
                   <div class="flex items-center gap-3">
                     <UIcon name="i-heroicons-document" class="h-5 w-5 text-[#8D6E63]" />
-                    <span class="font-medium text-[#2C2A26]">{{ objectDisplayName(object.name) }}</span>
+                    <span class="font-medium text-[#2C2A26]">{{ objectDisplayName(object.name, prefix) }}</span>
                   </div>
                 </td>
                 <td class="px-4 py-3 text-gray-500">
@@ -156,7 +201,7 @@
                 </td>
               </tr>
               <tr v-if="!filteredObjects.length && !filteredFolders.length">
-                <td colspan="3" class="px-4 py-10 text-center text-gray-500">
+                <td colspan="4" class="px-4 py-10 text-center text-gray-500">
                   No objects here yet. Upload something!
                 </td>
               </tr>
@@ -165,8 +210,8 @@
         </div>
       </div>
 
-      <input ref="fileInput" type="file" class="hidden" multiple @change="handleUpload" />
-      <input ref="folderInput" type="file" class="hidden" webkitdirectory @change="handleUpload" />
+      <input ref="fileInput" type="file" class="hidden" multiple @change="handleFileInputChange" />
+      <input ref="folderInput" type="file" class="hidden" webkitdirectory @change="handleFileInputChange" />
     </div>
 
     <!-- Object Preview & Details Modal -->
@@ -276,14 +321,11 @@
 </template>
 
 <script setup lang="ts">
-interface Bucket {
-  name: string
-  createdAt?: string
-}
-
-interface FolderResponse {
-  folders: string[]
-}
+import { formatSize, formatDate } from '~/utils/format'
+import { objectDisplayName } from '~/utils/object'
+import { useStorage } from '~/composables/useStorage'
+import { useUpload } from '~/composables/useUpload'
+import { useDownload } from '~/composables/useDownload'
 
 interface ObjectEntry {
   name: string
@@ -291,21 +333,27 @@ interface ObjectEntry {
   lastModified?: string
 }
 
+interface SelectedItem {
+    name: string
+  path: string
+  type: 'file' | 'folder'
+}
+
 const route = useRoute()
 const router = useRouter()
 const prefix = ref<string>((route.query.prefix as string) ?? '')
 const objectSearch = ref('')
-const fileInput = ref<HTMLInputElement>()
-const folderInput = ref<HTMLInputElement>()
 const showUploadMenu = ref(false)
 const uploadMenuRef = ref<HTMLElement>()
-const dropzoneRef = ref<HTMLElement>()
-const isDraggingOver = ref(false)
 const showCreatePathModal = ref(false)
 const newPathInput = ref('')
 const selectedObject = ref<ObjectEntry | null>(null)
 const selectedObjectInfo = ref<any>(null)
 const loadingObjectInfo = ref(false)
+const selectedItems = ref<SelectedItem[]>([])
+const downloading = ref(false)
+const bucketPolicy = ref<'private' | 'public-read' | 'authenticated-read' | 'custom' | null>(null)
+const loadingBucketPolicy = ref(false)
 
 const selectedBucket = computed(() => route.params.bucket as string | undefined)
 
@@ -316,13 +364,25 @@ watch(
   },
 )
 
+// Use storage composable
 const {
-  data: bucketData,
-  pending: bucketsPending,
-} = await useAsyncData<Bucket[]>('storage-buckets', () => $fetch('/api/storage/buckets'))
+  buckets,
+  bucketsPending,
+  folders,
+  objects,
+  breadcrumbs,
+  refreshBuckets,
+  refreshFolders,
+  refreshObjects,
+  handleNavigate: navigateStorage,
+  handleSelectBucket,
+  handleDeleteObject,
+  handleDeleteFolder,
+  getObjectInfo,
+  handleRefresh,
+} = useStorage(selectedBucket, prefix)
 
-const buckets = computed(() => bucketData.value ?? [])
-
+// Auto-redirect to first bucket if current bucket doesn't exist
 watchEffect(() => {
   if (!bucketsPending.value && buckets.value.length && selectedBucket.value) {
     const exists = buckets.value.some((bucket) => bucket.name === selectedBucket.value)
@@ -332,54 +392,22 @@ watchEffect(() => {
   }
 })
 
-const folderKey = computed(() => `folders-${selectedBucket.value ?? 'none'}-${prefix.value}`)
-const objectKey = computed(() => `objects-${selectedBucket.value ?? 'none'}-${prefix.value}`)
-
+// Use upload composable
 const {
-  data: folderData,
-  refresh: refreshFolders,
-} = await useAsyncData<FolderResponse>(
-  folderKey,
-  async () => {
-    if (!selectedBucket.value) {
-      return { folders: [] }
-    }
-    return $fetch('/api/storage/folders', {
-      params: { bucket: selectedBucket.value, prefix: prefix.value },
-    })
-  },
-  { watch: [selectedBucket, () => prefix.value] },
-)
+  fileInput,
+  folderInput,
+  dropzoneRef,
+  isDraggingOver,
+  handleDragOver,
+  handleDragLeave,
+  handleDrop,
+  handleFileInputChange,
+  triggerFileUpload,
+  triggerFolderUpload,
+} = useUpload(selectedBucket, prefix, refreshObjects, refreshFolders)
 
-const {
-  data: objectData,
-  refresh: refreshObjects,
-} = await useAsyncData<{ objects: ObjectEntry[] }>(
-  objectKey,
-  async () => {
-    if (!selectedBucket.value) {
-      return { objects: [] }
-    }
-    return $fetch('/api/storage/objects', {
-      params: { bucket: selectedBucket.value, prefix: prefix.value },
-    })
-  },
-  { watch: [selectedBucket, () => prefix.value] },
-)
-
-const folders = computed(() =>
-  (folderData.value?.folders ?? []).map((path) => ({
-    path,
-    name: path.replace(prefix.value, '').replace(/\/$/, ''),
-  })),
-)
-
-const objects = computed(() => {
-  // Filter เอา objects ที่ไม่มี name หรือ size เป็น 0 ออก
-  return (objectData.value?.objects ?? []).filter((object) => {
-    return object.name && object.size > 0
-  })
-})
+// Use download composable
+const { downloadItems } = useDownload(selectedBucket)
 
 const filteredObjects = computed(() => {
   if (!objectSearch.value) {
@@ -390,26 +418,15 @@ const filteredObjects = computed(() => {
   )
 })
 
-const filteredFolders = computed(() => folders.value)
-
-const breadcrumbs = computed(() => {
-  const segments = prefix.value ? prefix.value.split('/').filter(Boolean) : []
-  const crumbs: { label: string; value: string }[] = []
-  let accumulated = ''
-  segments.forEach((segment) => {
-    accumulated += `${segment}/`
-    crumbs.push({ label: segment, value: accumulated })
-  })
-  return crumbs
+const filteredFolders = computed(() => {
+  if (!objectSearch.value) {
+    return folders.value
+    }
+  return folders.value.filter((folder) =>
+    folder.name.toLowerCase().includes(objectSearch.value.toLowerCase()) ||
+    folder.path.toLowerCase().includes(objectSearch.value.toLowerCase()),
+  )
 })
-
-const backPrefix = computed(() => {
-  const segments = prefix.value.split('/').filter(Boolean)
-  segments.pop()
-  return segments.length ? `${segments.join('/')}/` : ''
-})
-
-const forwardPrefix = computed(() => prefix.value)
 
 const bucketTitle = computed(() => selectedBucket.value || 'Select a bucket')
 const createdAtText = computed(() => {
@@ -423,16 +440,229 @@ const summaryText = computed(() => {
   return `${formatSize(total)} · ${count} object${count === 1 ? '' : 's'}`
 })
 
-const handleSelectBucket = (name: string) => {
-  router.push({
-    path: `/storage/${encodeURIComponent(name)}`,
-    query: { prefix: '' },
+const bucketAccessText = computed(() => {
+  if (!bucketPolicy.value) return 'Loading...'
+  switch (bucketPolicy.value) {
+    case 'private':
+      return 'PRIVATE'
+    case 'public-read':
+      return 'PUBLIC READ'
+    case 'authenticated-read':
+      return 'AUTHENTICATED READ'
+    case 'custom':
+      return 'CUSTOM'
+    default:
+      return 'PRIVATE'
+  }
+})
+
+// Load bucket policy when bucket changes
+const loadBucketPolicy = async () => {
+  if (!selectedBucket.value) {
+    bucketPolicy.value = null
+    return
+  }
+
+  loadingBucketPolicy.value = true
+  try {
+    const response = await $fetch('/api/storage/bucket.policy', {
+      params: { bucket: selectedBucket.value }
+    })
+    const policyType = response.policyType as 'private' | 'public-read' | 'authenticated-read' | 'custom' | null
+    bucketPolicy.value = policyType || 'private'
+  } catch (error: any) {
+    console.error('Failed to load bucket policy:', error)
+    bucketPolicy.value = 'private'
+  } finally {
+    loadingBucketPolicy.value = false
+  }
+}
+
+// Watch for bucket changes to reload policy
+watch(selectedBucket, loadBucketPolicy, { immediate: true })
+
+// Watch for route changes (including query params) to reload policy
+// This will trigger when coming back from dashboard modal after policy change
+watch(() => route.fullPath, () => {
+  if (selectedBucket.value) {
+    loadBucketPolicy()
+  }
+})
+
+// Also reload policy when window regains focus (in case policy was changed in another tab/modal)
+if (typeof window !== 'undefined') {
+  window.addEventListener('focus', () => {
+    if (selectedBucket.value) {
+      loadBucketPolicy()
+    }
+  })
+}
+
+// Use visibilitychange to reload when page becomes visible again
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && selectedBucket.value) {
+      loadBucketPolicy()
+    }
   })
 }
 
 const handleNavigate = (nextPrefix: string) => {
-  router.replace({ query: { prefix: nextPrefix } })
+  navigateStorage(nextPrefix)
   selectedObject.value = null // Clear selection when navigating
+  selectedItems.value = [] // Clear checkbox selection when navigating
+}
+
+// Selection management
+const toggleFolderSelection = (folder: { path: string; name: string }) => {
+  const index = selectedItems.value.findIndex(
+    (item) => item.path === folder.path && item.type === 'folder'
+  )
+  
+  if (index >= 0) {
+    selectedItems.value.splice(index, 1)
+  } else {
+    selectedItems.value.push({
+      name: folder.name,
+      path: folder.path,
+      type: 'folder',
+    })
+  }
+}
+
+const toggleObjectSelection = (object: ObjectEntry) => {
+  const index = selectedItems.value.findIndex(
+    (item) => item.path === object.name && item.type === 'file'
+  )
+  
+  if (index >= 0) {
+    selectedItems.value.splice(index, 1)
+  } else {
+    selectedItems.value.push({
+      name: objectDisplayName(object.name, prefix.value),
+      path: object.name,
+      type: 'file',
+    })
+  }
+}
+
+const isFolderSelected = (path: string) => {
+  return selectedItems.value.some(
+    (item) => item.path === path && item.type === 'folder'
+  )
+}
+
+const isObjectSelected = (path: string) => {
+  return selectedItems.value.some(
+    (item) => item.path === path && item.type === 'file'
+  )
+}
+
+const isAllSelected = computed(() => {
+  const allItems = [
+    ...filteredFolders.value.map((f) => ({ path: f.path, type: 'folder' as const })),
+    ...filteredObjects.value.map((o) => ({ path: o.name, type: 'file' as const })),
+  ]
+  
+  if (allItems.length === 0) return false
+  return allItems.every((item) =>
+    item.type === 'folder'
+      ? isFolderSelected(item.path)
+      : isObjectSelected(item.path)
+  )
+})
+
+const isIndeterminate = computed(() => {
+  const allItems = [
+    ...filteredFolders.value.map((f) => ({ path: f.path, type: 'folder' as const })),
+    ...filteredObjects.value.map((o) => ({ path: o.name, type: 'file' as const })),
+  ]
+  
+  if (allItems.length === 0) return false
+  
+  const selectedCount = allItems.filter((item) =>
+    item.type === 'folder'
+      ? isFolderSelected(item.path)
+      : isObjectSelected(item.path)
+  ).length
+  
+  return selectedCount > 0 && selectedCount < allItems.length
+})
+
+const handleSelectAll = (event: Event) => {
+  const checked = (event.target as HTMLInputElement).checked
+  
+  if (checked) {
+    // Select all
+    filteredFolders.value.forEach((folder) => {
+      if (!isFolderSelected(folder.path)) {
+        selectedItems.value.push({
+          name: folder.name,
+          path: folder.path,
+          type: 'folder',
+        })
+      }
+    })
+    
+    filteredObjects.value.forEach((object) => {
+      if (!isObjectSelected(object.name)) {
+        selectedItems.value.push({
+          name: objectDisplayName(object.name, prefix.value),
+          path: object.name,
+          type: 'file',
+  })
+}
+    })
+  } else {
+    // Deselect all
+    const pathsToRemove = new Set([
+      ...filteredFolders.value.map((f) => f.path),
+      ...filteredObjects.value.map((o) => o.name),
+    ])
+    
+    selectedItems.value = selectedItems.value.filter(
+      (item) => !pathsToRemove.has(item.path)
+    )
+  }
+}
+
+const handleDownloadSelected = async () => {
+  if (!selectedItems.value.length || !selectedBucket.value) return
+  
+  downloading.value = true
+  try {
+    await downloadItems(selectedItems.value)
+  } finally {
+    downloading.value = false
+  }
+}
+
+const handleDeleteSelected = async () => {
+  if (!selectedItems.value.length || !selectedBucket.value) return
+  
+  const count = selectedItems.value.length
+  if (!confirm(`Are you sure you want to delete ${count} item${count === 1 ? '' : 's'}?`)) {
+    return
+  }
+  
+  try {
+    // Delete all selected items
+    for (const item of selectedItems.value) {
+      if (item.type === 'file') {
+        await handleDeleteObject({ name: item.path, size: 0 })
+      } else if (item.type === 'folder') {
+        await handleDeleteFolder({ path: item.path })
+      }
+    }
+    
+    // Clear selection after deletion
+    selectedItems.value = []
+    await handleRefresh()
+    window.alert(`${count} item${count === 1 ? '' : 's'} deleted successfully`)
+  } catch (error: any) {
+    console.error('Delete error:', error)
+    window.alert(`Failed to delete items: ${error?.data?.message || error?.message || 'Unknown error'}`)
+  }
 }
 
 const handleSelectObject = async (object: ObjectEntry) => {
@@ -441,16 +671,14 @@ const handleSelectObject = async (object: ObjectEntry) => {
   selectedObjectInfo.value = null
 
   try {
-    const info = await $fetch('/api/storage/object.info', {
-      params: {
-        bucket: selectedBucket.value,
-        objectName: object.name,
-      },
-    })
-    selectedObjectInfo.value = info
+    const info = await getObjectInfo(object.name)
+    selectedObjectInfo.value = info || {
+      name: object.name,
+      size: object.size,
+      lastModified: object.lastModified,
+    }
   } catch (error: any) {
     console.error('Failed to load object info:', error)
-    // Still show basic info from object list
     selectedObjectInfo.value = {
       name: object.name,
       size: object.size,
@@ -464,7 +692,7 @@ const handleSelectObject = async (object: ObjectEntry) => {
 const handleObjectDeleted = async () => {
   selectedObject.value = null
   selectedObjectInfo.value = null
-  await Promise.all([refreshObjects(), refreshFolders()])
+  await handleRefresh()
 }
 
 const handleCreatePath = () => {
@@ -494,32 +722,18 @@ const handleClearPath = () => {
   newPathInput.value = ''
 }
 
-const objectDisplayName = (name?: string) => {
-  if (!name) return ''
-  return name.replace(prefix.value, '')
-}
-
-const formatSize = (size: number) => {
-  if (size < 1024) return `${size} B`
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-  if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`
-  return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`
-}
-
-const formatDate = (value: string) => new Date(value).toLocaleString()
-
 const toggleUploadMenu = () => {
   showUploadMenu.value = !showUploadMenu.value
 }
 
-const triggerFileUpload = () => {
+const triggerFileUploadFromMenu = () => {
   showUploadMenu.value = false
-  fileInput.value?.click()
+  triggerFileUpload()
 }
 
-const triggerFolderUpload = () => {
+const triggerFolderUploadFromMenu = () => {
   showUploadMenu.value = false
-  folderInput.value?.click()
+  triggerFolderUpload()
 }
 
 // ปิดเมนูเมื่อคลิกข้างนอก
@@ -535,197 +749,4 @@ onMounted(() => {
     document.removeEventListener('click', handleClickOutside)
   })
 })
-
-const handleUpload = async (event: Event) => {
-  const target = event.target as HTMLInputElement
-  const files = target.files
-  if (!files || !files.length || !selectedBucket.value) return
-  await uploadFiles(files)
-  target.value = ''
-}
-
-const uploadFiles = async (files: FileList | File[]) => {
-  if (!files || !files.length || !selectedBucket.value) return
-
-  const formData = new FormData()
-  Array.from(files).forEach((file) => {
-    // ใช้ webkitRelativePath สำหรับโฟลเดอร์ หรือ file.name สำหรับไฟล์เดี่ยว
-    // webkitRelativePath จะมี path แบบ "folder1/ของ1.txt" เมื่ออัพโหลดโฟลเดอร์
-    const fileName = (file as any).webkitRelativePath || file.name
-    // ใช้ field name 'files' และส่ง filename เป็น parameter ที่ 3
-    formData.append('files', file, fileName)
-  })
-
-  try {
-    await $fetch('/api/storage/upload', {
-      method: 'POST',
-      body: formData,
-      params: { 
-        bucket: selectedBucket.value, 
-        prefix: prefix.value || '' 
-      },
-    })
-    window.alert('Upload complete')
-    await Promise.all([refreshObjects(), refreshFolders()])
-  } catch (error: any) {
-    console.error('Upload error:', error)
-    const errorMessage = error?.data?.message || error?.message || 'Unknown error'
-    window.alert('Upload failed: ' + errorMessage)
-  }
-}
-
-const handleDragOver = (event: DragEvent) => {
-  event.preventDefault()
-  if (event.dataTransfer) {
-    event.dataTransfer.dropEffect = 'copy'
-  }
-  isDraggingOver.value = true
-}
-
-const handleDragLeave = (event: DragEvent) => {
-  event.preventDefault()
-  // ตรวจสอบว่า mouse ยังอยู่ใน dropzone หรือไม่
-  const relatedTarget = event.relatedTarget as HTMLElement
-  if (!dropzoneRef.value?.contains(relatedTarget)) {
-    isDraggingOver.value = false
-  }
-}
-
-// ฟังก์ชันสำหรับอ่านไฟล์ทั้งหมดจาก directory entry
-const readDirectoryEntry = (entry: FileSystemEntry, basePath: string = ''): Promise<Array<{ file: File; path: string }>> => {
-  return new Promise((resolve, reject) => {
-    if (entry.isFile) {
-      const fileEntry = entry as FileSystemFileEntry
-      fileEntry.file((file) => {
-        // สร้าง File ใหม่ที่มีชื่อไฟล์ที่ถูกต้อง (ไม่ใช้ path จาก file.name เดิม)
-        // ใช้แค่ชื่อไฟล์สุดท้ายเท่านั้น
-        const fileNameOnly = file.name.split('/').pop() || file.name.split('\\').pop() || file.name
-        const relativePath = basePath ? `${basePath}/${fileNameOnly}` : fileNameOnly
-        
-        // สร้าง File ใหม่ที่มีชื่อที่ถูกต้อง
-        const newFile = new File([file], fileNameOnly, { type: file.type, lastModified: file.lastModified })
-        resolve([{ file: newFile, path: relativePath }])
-      }, reject)
-    } else if (entry.isDirectory) {
-      const dirEntry = entry as FileSystemDirectoryEntry
-      const reader = dirEntry.createReader()
-      const files: Array<{ file: File; path: string }> = []
-
-      const readEntries = () => {
-        reader.readEntries((entries) => {
-          if (entries.length === 0) {
-            resolve(files)
-            return
-          }
-
-          const promises = entries.map((entry) => {
-            // เพิ่มชื่อเข้า basePath เฉพาะ directory เท่านั้น ไม่ใช่ไฟล์
-            if (entry.isDirectory) {
-              const entryNameOnly = entry.name.split('/').pop() || entry.name.split('\\').pop() || entry.name
-              const newBasePath = basePath ? `${basePath}/${entryNameOnly}` : entryNameOnly
-              return readDirectoryEntry(entry, newBasePath)
-            } else {
-              // ถ้าเป็นไฟล์ ให้ส่ง basePath เดิม ไม่ต้องเพิ่มชื่อไฟล์
-              return readDirectoryEntry(entry, basePath)
-            }
-          })
-
-          Promise.all(promises).then((results) => {
-            files.push(...results.flat())
-            readEntries() // อ่านต่อ
-          }).catch(reject)
-        }, reject)
-      }
-
-      readEntries()
-    } else {
-      resolve([])
-    }
-  })
-}
-
-const handleDrop = async (event: DragEvent) => {
-  event.preventDefault()
-  event.stopPropagation()
-  isDraggingOver.value = false
-
-  if (!event.dataTransfer) return
-
-  const items = event.dataTransfer.items
-  const files = event.dataTransfer.files
-
-  // ตรวจสอบว่าเป็น directory หรือไม่
-  if (items && items.length > 0) {
-    try {
-      const entries: FileSystemEntry[] = []
-      
-      // อ่าน entries ทั้งหมด
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i]
-        if (item && item.kind === 'file') {
-          const entry = item.webkitGetAsEntry()
-          if (entry) {
-            entries.push(entry)
-          }
-        }
-      }
-
-      // ถ้ามี directory ให้อ่านโครงสร้างและอัพโหลด
-      const hasDirectory = entries.some(e => e.isDirectory)
-      if (hasDirectory) {
-        // อ่านไฟล์ทั้งหมดจาก directory
-        const allFiles: Array<{ file: File; path: string }> = []
-        
-        for (const entry of entries) {
-          // ใช้แค่ชื่อโฟลเดอร์เท่านั้น (ไม่ใช้ path จาก entry.name)
-          // entry.name อาจจะเป็น "Foldername" หรือ "C:\path\to\Foldername" 
-          const folderNameOnly = entry.name.split('/').pop() || entry.name.split('\\').pop() || entry.name
-          const files = await readDirectoryEntry(entry, folderNameOnly)
-          allFiles.push(...files)
-        }
-
-        if (allFiles.length > 0) {
-          // สร้าง FormData และอัพโหลด
-          const formData = new FormData()
-          allFiles.forEach(({ file, path }) => {
-            // ใช้ path ที่เราสร้างเองเป็น filename (parameter ที่ 3)
-            // path จะเป็น "Foldername/1.txt" ไม่ใช่ "Foldername/1.txt/1.txt"
-            formData.append('files', file, path)
-          })
-
-          try {
-            await $fetch('/api/storage/upload', {
-              method: 'POST',
-              body: formData,
-              params: { 
-                bucket: selectedBucket.value, 
-                prefix: prefix.value || '' 
-              },
-            })
-            window.alert(`Upload complete: ${allFiles.length} file(s) uploaded`)
-            await Promise.all([refreshObjects(), refreshFolders()])
-          } catch (error: any) {
-            console.error('Upload error:', error)
-            const errorMessage = error?.data?.message || error?.message || 'Unknown error'
-            window.alert('Upload failed: ' + errorMessage)
-          }
-        }
-        return
-      }
-    } catch (e) {
-      // ถ้าไม่สามารถอ่าน directory ได้ ให้ลองอัพโหลดไฟล์ธรรมดา
-      console.warn('Could not read directory structure:', e)
-    }
-  }
-
-  // ถ้าเป็นไฟล์ธรรมดา
-  if (files && files.length > 0) {
-    await uploadFiles(files)
-  }
-}
-
-const handleRefresh = async () => {
-  await Promise.all([refreshObjects(), refreshFolders()])
-  // window.alert('Refreshed')
-}
 </script>

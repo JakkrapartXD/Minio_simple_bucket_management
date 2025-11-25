@@ -4,7 +4,7 @@ const env = import.meta.env as Record<string, string | undefined>
 export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
-  modules: ['@nuxtjs/tailwindcss'],
+  modules: ['@nuxtjs/tailwindcss', '@nuxt/icon'],
   app: {
     head: {
       title: 'MINIO OBJECT STORE',
