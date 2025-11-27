@@ -12,10 +12,22 @@
               OBJECT STORE
             </span>
           </h1>
+          <div class="mt-3 text-xs text-[#BCAAA4]">
+            <div class="flex items-center gap-2">
+              <Icon name="heroicons:user-circle" class="h-4 w-4" />
+              <span>{{ user?.username }}</span>
+              <span 
+                class="px-2 py-0.5 rounded text-xs font-semibold"
+                :class="isAdmin ? 'bg-yellow-600 text-white' : 'bg-blue-600 text-white'"
+              >
+                {{ user?.role }}
+              </span>
+            </div>
+          </div>
         </div>
   
-        <!-- Create Bucket btn -->
-        <div class="px-4">
+        <!-- Create Bucket btn (Admin only) -->
+        <div v-if="isAdmin" class="px-4">
           <button
             class="w-full inline-flex items-center gap-3 rounded-lg bg-[#8D6E63] hover:bg-[#A1887F] text-white font-medium px-3 py-2 text-sm transition-colors shadow-md hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
             :disabled="creatingBucket"
@@ -57,9 +69,12 @@
                   : 'text-[#D7CCC8] hover:bg-[#6D4C41]/60 hover:text-white'"
                 @click="handleSelectBucket(bucket.name)"
               >
-                🪣 <span class="truncate flex-1 text-left">{{ bucket.name }}</span>
+                <span v-if="bucket.isPublic" title="Public bucket">🌐</span>
+                <span v-else title="Private bucket">🔒</span>
+                <span class="truncate flex-1 text-left">{{ bucket.name }}</span>
               </button>
               <button
+                v-if="isAdmin"
                 class="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 px-2 py-1 rounded text-xs transition-opacity"
                 :class="bucket.name === selectedBucket
                   ? 'text-white hover:bg-[#5D4037]'
@@ -74,17 +89,21 @@
         </nav>
   
         <!-- Footer -->
-        <!-- <div class="border-t border-[#6D4C41] px-4 py-3 text-sm text-[#A1887F] space-y-1">
-          <button class="w-full text-left hover:text-[#D7CCC8]">Documentation</button>
-          <button class="w-full text-left hover:text-[#D7CCC8]">License</button>
-          <button class="w-full text-left hover:text-[#D7CCC8]">Sign Out</button>
-        </div> -->
+        <div class="border-t border-[#6D4C41] px-4 py-3 text-sm text-[#A1887F] space-y-1">
+          <NuxtLink to="/api-docs" class="w-full text-left hover:text-[#D7CCC8] block px-2 py-1">
+            Documentation
+          </NuxtLink>
+          <button class="w-full text-left hover:text-[#D7CCC8] px-2 py-1" @click="handleLogout">
+            <Icon name="heroicons:arrow-right-on-rectangle" class="h-4 w-4 inline-block mr-2" />
+            Sign Out
+          </button>
+        </div>
   
       </aside>
   
       <!-- ⭐ Page content here -->
       <main class="flex-1 bg-[#EFE7DD]">
-        <NuxtPage />
+        <slot />
       </main>
     </div>
 
@@ -303,6 +322,7 @@
   <script setup lang="ts">
   const route = useRoute()
   const router = useRouter()
+  const { user, isAdmin, logout } = useAuth()
 
   const search = ref('')
   const creatingBucket = ref(false)
@@ -327,11 +347,17 @@
 
   const selectedBucket = computed(() => route.params.bucket as string | undefined)
 
+  const { token } = useAuth()
+  
   const {
     data: bucketData,
     pending: bucketsPending,
     refresh: refreshBuckets,
-  } = await useAsyncData('dashboard-buckets', () => $fetch('/api/storage/buckets'))
+  } = await useAsyncData('dashboard-buckets', () => $fetch('/api/storage/buckets', {
+    headers: {
+      Authorization: `Bearer ${token.value}`,
+    },
+  }))
 
   const buckets = computed(() => bucketData.value ?? [])
 
@@ -398,11 +424,21 @@
     try {
       await $fetch('/api/storage/bucket.create', {
         method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token.value}`,
+        },
         body: { name: name.toLowerCase() },
       })
+      
+      // Refresh buckets list
       await refreshBuckets()
+      
+      // Close modal and clear form
       showCreateBucketModal.value = false
       newBucketName.value = ''
+      
+      // Wait a bit for the data to be fully updated before navigating
+      await new Promise(resolve => setTimeout(resolve, 100))
       
       // Navigate to the new bucket
       router.push(`/storage/${encodeURIComponent(name.toLowerCase())}`)
@@ -434,7 +470,10 @@
     try {
       // Load current policy
       const policyResponse = await $fetch('/api/storage/bucket.policy', {
-        params: { bucket: bucketName }
+        params: { bucket: bucketName },
+        headers: {
+          Authorization: `Bearer ${token.value}`,
+        },
       })
       const policyType = policyResponse.policyType as 'private' | 'public-read' | 'authenticated-read'
       bucketPolicy.value = policyType || 'private'
@@ -455,6 +494,9 @@
     try {
       await $fetch('/api/storage/bucket.policy', {
         method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token.value}`,
+        },
         body: {
           bucket: editingBucket.value,
           policy: bucketPolicy.value
@@ -487,26 +529,13 @@
       return
     }
 
-    // Load bucket stats first
-    if (bucketObjectCount.value === 0 && !loadingBucketStats.value) {
-      loadingBucketStats.value = true
-      try {
-        const stats = await $fetch('/api/storage/bucket.stats', {
-          params: { bucket: editingBucket.value }
-        })
-        bucketObjectCount.value = stats.objectCount
-      } catch (error) {
-        console.error('Failed to load bucket stats:', error)
-      } finally {
-        loadingBucketStats.value = false
-      }
-      return // Show stats first, user needs to confirm again
-    }
-
     deletingBucket.value = true
     try {
       await $fetch('/api/storage/bucket.delete', {
         method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token.value}`,
+        },
         body: {
           bucket: editingBucket.value
         }
@@ -515,14 +544,17 @@
       // Refresh buckets list
       await refreshBuckets()
       
+      // Save deleted bucket name before clearing
+      const deletedBucketName = editingBucket.value
+      
       // Close modals
       showDeleteConfirm.value = false
       showEditBucketModal.value = false
       editingBucket.value = null
       deleteBucketConfirm.value = ''
+      bucketObjectCount.value = 0
       
       // If deleted bucket was selected, navigate to first bucket
-      const deletedBucketName = editingBucket.value
       if (selectedBucket.value === deletedBucketName) {
         const remainingBuckets = buckets.value.filter(b => b.name !== deletedBucketName)
         const firstBucket = remainingBuckets[0]
@@ -541,6 +573,10 @@
     }
   }
 
+  const handleLogout = () => {
+    logout()
+  }
+
   // Watch showDeleteConfirm to load stats when modal opens
   watch(showDeleteConfirm, async (show) => {
     if (show && editingBucket.value) {
@@ -548,7 +584,10 @@
       deleteBucketConfirm.value = ''
       try {
         const stats = await $fetch('/api/storage/bucket.stats', {
-          params: { bucket: editingBucket.value }
+          params: { bucket: editingBucket.value },
+          headers: {
+            Authorization: `Bearer ${token.value}`,
+          },
         })
         bucketObjectCount.value = stats.objectCount
       } catch (error: any) {

@@ -54,7 +54,12 @@ function generateBucketPolicy(bucketName: string, policyType: string): string {
   }
 }
 
+import { requireAdmin } from '../../lib/auth'
+
 export default defineEventHandler(async (event) => {
+  // Only admins can set bucket policies
+  await requireAdmin(event)
+
   const body = await readBody<{ bucket?: string; policy?: string }>(event)
   const bucket = body?.bucket
   const policyType = body?.policy

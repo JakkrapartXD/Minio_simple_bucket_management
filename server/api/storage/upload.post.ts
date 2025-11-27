@@ -1,6 +1,10 @@
 import { minio } from '../lib/minio'
+import { requireAdmin } from '../../lib/auth'
 
 export default defineEventHandler(async (event) => {
+  // Only admin can upload files
+  await requireAdmin(event)
+
   const form = await readMultipartFormData(event)
   const bucket = getQuery(event).bucket as string
   const prefix = (getQuery(event).prefix as string) || ''
@@ -25,15 +29,15 @@ export default defineEventHandler(async (event) => {
     // prefix (optional) เช่น "uploads/"
     // รองรับการอัพโหลดโฟลเดอร์ - filename จะมี path แบบ relative เช่น "folder1/ของ1.txt"
     let objectName = file.filename
-    
+
     // Normalize path separators (handle both / and \)
     objectName = objectName.replace(/\\/g, '/')
-    
+
     // Remove leading slash if present
     if (objectName.startsWith('/')) {
       objectName = objectName.substring(1)
     }
-    
+
     // Combine with prefix
     objectName = prefix + objectName
 

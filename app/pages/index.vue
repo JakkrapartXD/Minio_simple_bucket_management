@@ -1,17 +1,33 @@
 <script setup lang="ts">
 const router = useRouter()
+const { token, fetchUser, isAuthenticated } = useAuth()
 
-const { data, pending } = await useAsyncData('buckets-initial', () =>
-  $fetch('/api/storage/buckets'),
-)
+// Ensure user is authenticated
+await fetchUser()
 
-watchEffect(() => {
-  if (import.meta.client) {
-    const buckets = data.value
-    if (!pending.value && buckets && buckets.length > 0 && buckets[0]) {
-      router.replace(`/storage/${encodeURIComponent(buckets[0].name)}`)
+if (!isAuthenticated.value) {
+  router.replace('/login')
+} else {
+  const { data, pending } = await useAsyncData('buckets-initial', () =>
+    $fetch('/api/storage/buckets', {
+      headers: {
+        Authorization: `Bearer ${token.value}`,
+      },
+    }),
+  )
+
+  watchEffect(() => {
+    if (import.meta.client) {
+      const buckets = data.value
+      if (!pending.value && buckets && buckets.length > 0 && buckets[0]) {
+        router.replace(`/storage/${encodeURIComponent(buckets[0].name)}`)
+      }
     }
-  }
+  })
+}
+
+definePageMeta({
+  layout: 'dashboard',
 })
 </script>
 

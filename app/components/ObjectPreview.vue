@@ -62,6 +62,8 @@ interface Props {
 
 const props = defineProps<Props>()
 
+const { token } = useAuth()
+
 const previewUrl = ref('')
 const textContent = ref('')
 const previewError = ref(false)
@@ -101,31 +103,38 @@ onMounted(async () => {
   if (!canPreview.value) return
 
   try {
-    // สร้าง presigned URL สำหรับ preview
-    const shareData = await $fetch('/api/storage/share', {
-      params: {
-        bucket: props.bucket,
-        objectName: props.objectName,
-        expiresIn: 3600, // 1 hour
+    // Fetch file with Authorization header
+    const downloadUrl = `/api/storage/download?bucket=${encodeURIComponent(props.bucket)}&objectName=${encodeURIComponent(props.objectName)}`
+    
+    const response = await fetch(downloadUrl, {
+      headers: {
+        Authorization: `Bearer ${token.value}`,
       },
     })
-    previewUrl.value = shareData.url
 
-    // ถ้าเป็น text file ให้โหลดเนื้อหา
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    // For text files, read as text
     if (isText.value) {
-      try {
-        const response = await fetch(shareData.url)
-        const text = await response.text()
-        // จำกัดความยาวเพื่อไม่ให้โหลดช้า
-        textContent.value = text.length > 10000 ? text.substring(0, 10000) + '\n\n... (truncated)' : text
-      } catch (e) {
-        console.error('Failed to load text content:', e)
-        previewError.value = true
-      }
+      const text = await response.text()
+      textContent.value = text.length > 10000 ? text.substring(0, 10000) + '\n\n... (truncated)' : text
+    } else {
+      // For binary files (images, videos, PDFs, audio), create blob URL
+      const blob = await response.blob()
+      previewUrl.value = window.URL.createObjectURL(blob)
     }
   } catch (error) {
-    console.error('Failed to generate preview URL:', error)
+    console.error('Failed to load preview:', error)
     previewError.value = true
+  }
+})
+
+// Cleanup blob URL when component unmounts
+onUnmounted(() => {
+  if (previewUrl.value && previewUrl.value.startsWith('blob:')) {
+    window.URL.revokeObjectURL(previewUrl.value)
   }
 })
 

@@ -15,7 +15,7 @@
           <UButton variant="outline" color="neutral" icon="i-heroicons-arrow-path" @click="handleRefresh" class="cursor-pointer">
             Refresh
           </UButton>
-          <div ref="uploadMenuRef" class="relative cursor-pointer">
+          <div v-if="isAdmin" ref="uploadMenuRef" class="relative cursor-pointer">
             <UButton 
               color="primary" 
               icon="i-heroicons-arrow-up-tray" 
@@ -68,6 +68,7 @@
                 Download
               </UButton>
               <UButton
+                v-if="isAdmin"
                 color="error"
                 icon="i-heroicons-trash"
                 @click="handleDeleteSelected"
@@ -106,13 +107,7 @@
             </template>
           </div>
           <div class="flex items-center gap-2">
-            <!-- <UButton variant="ghost" icon="i-heroicons-arrow-uturn-left" @click="handleNavigate(backPrefix)">
-              Back
-            </UButton>
-            <UButton variant="ghost" icon="i-heroicons-arrow-uturn-right" @click="handleNavigate(forwardPrefix)">
-              Forward
-            </UButton> -->
-            <UButton variant="outline" icon="i-heroicons-folder-plus" @click="showCreatePathModal = true">
+            <UButton v-if="isAdmin" variant="outline" icon="i-heroicons-folder-plus" @click="showCreatePathModal = true">
               Create new path
             </UButton>
           </div>
@@ -327,6 +322,14 @@ import { useStorage } from '~/composables/useStorage'
 import { useUpload } from '~/composables/useUpload'
 import { useDownload } from '~/composables/useDownload'
 
+// Check authentication
+const { isAuthenticated, fetchUser, isAdmin } = useAuth()
+await fetchUser()
+
+if (!isAuthenticated.value) {
+  navigateTo('/login')
+}
+
 interface ObjectEntry {
   name: string
   size: number
@@ -351,6 +354,10 @@ const selectedObject = ref<ObjectEntry | null>(null)
 const selectedObjectInfo = ref<any>(null)
 const loadingObjectInfo = ref(false)
 const selectedItems = ref<SelectedItem[]>([])
+
+definePageMeta({
+  layout: 'dashboard',
+})
 const downloading = ref(false)
 const bucketPolicy = ref<'private' | 'public-read' | 'authenticated-read' | 'custom' | null>(null)
 const loadingBucketPolicy = ref(false)
@@ -465,8 +472,12 @@ const loadBucketPolicy = async () => {
 
   loadingBucketPolicy.value = true
   try {
+    const { token } = useAuth()
     const response = await $fetch('/api/storage/bucket.policy', {
-      params: { bucket: selectedBucket.value }
+      params: { bucket: selectedBucket.value },
+      headers: {
+        Authorization: `Bearer ${token.value}`,
+      },
     })
     const policyType = response.policyType as 'private' | 'public-read' | 'authenticated-read' | 'custom' | null
     bucketPolicy.value = policyType || 'private'

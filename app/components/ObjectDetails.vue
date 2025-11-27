@@ -14,6 +14,7 @@
           <span>{{ downloading ? 'Downloading...' : 'Download' }}</span>
         </button>
         <button
+          v-if="isAdmin"
           class="w-full flex items-center gap-3 px-4 py-2 text-left text-gray-700 hover:bg-gray-50 rounded-md transition-colors"
           @click="showShareModal = true"
         >
@@ -43,7 +44,7 @@
         </button> -->
       </div>
       
-      <div class="border-t border-gray-200 mt-4 pt-4">
+      <div v-if="isAdmin" class="border-t border-gray-200 mt-4 pt-4">
         <button
           class="w-full flex items-center gap-3 px-4 py-2 text-left text-red-600 hover:bg-red-50 rounded-md transition-colors border border-red-200"
           @click="handleDelete"
@@ -233,6 +234,8 @@ const emit = defineEmits<{
   deleted: []
 }>()
 
+const { token, isAdmin } = useAuth()
+
 const deleting = ref(false)
 const downloading = ref(false)
 const showShareModal = ref(false)
@@ -283,22 +286,28 @@ const formatLastModified = (date?: string) => {
 const handleDownload = async () => {
   downloading.value = true
   try {
-    // สร้าง presigned URL สำหรับ download
-    const shareData = await $fetch('/api/storage/share', {
-      params: {
-        bucket: props.bucket,
-        objectName: props.objectName,
-        expiresIn: 3600, // 1 hour
+    // Use download API directly (accessible to all users)
+    const downloadUrl = `/api/storage/download?bucket=${encodeURIComponent(props.bucket)}&objectName=${encodeURIComponent(props.objectName)}`
+    
+    const response = await fetch(downloadUrl, {
+      headers: {
+        Authorization: `Bearer ${token.value}`,
       },
     })
     
-    // ดาวน์โหลดไฟล์
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const blob = await response.blob()
+    const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.href = shareData.url
+    link.href = url
     link.download = props.objectName.split('/').pop() || 'download'
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
   } catch (error: any) {
     window.alert(error?.data?.message || error?.message || 'Failed to download file')
   } finally {
@@ -327,6 +336,9 @@ const updateShareUrl = async () => {
         bucket: props.bucket,
         objectName: props.objectName,
         expiresIn,
+      },
+      headers: {
+        Authorization: `Bearer ${token.value}`,
       },
     })
     
@@ -385,6 +397,9 @@ const handleDelete = async () => {
       body: {
         bucket: props.bucket,
         name: props.objectName,
+      },
+      headers: {
+        Authorization: `Bearer ${token.value}`,
       },
     })
     emit('deleted')

@@ -1,9 +1,13 @@
 import { minio } from '../lib/minio'
+import { requireAuth } from '../../lib/auth'
 
 export default defineEventHandler(async (event) => {
-    const query = getQuery(event)
-    const bucket = typeof query.bucket === 'string' ? query.bucket : undefined
-    const prefix = typeof query.prefix === 'string' ? query.prefix : ''
+  // All authenticated users can view folders
+  await requireAuth(event)
+
+  const query = getQuery(event)
+  const bucket = typeof query.bucket === 'string' ? query.bucket : undefined
+  const prefix = typeof query.prefix === 'string' ? query.prefix : ''
 
   if (!bucket) {
     throw createError({ statusCode: 400, statusMessage: 'bucket required' })

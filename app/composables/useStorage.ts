@@ -24,13 +24,18 @@ interface ObjectResponse {
 export function useStorage(bucket: Ref<string | undefined>, prefix: Ref<string>) {
   const route = useRoute()
   const router = useRouter()
+  const { token } = useAuth()
 
   // Buckets
   const {
     data: bucketData,
     pending: bucketsPending,
     refresh: refreshBuckets,
-  } = useAsyncData<Bucket[]>('storage-buckets', () => $fetch('/api/storage/buckets'))
+  } = useAsyncData<Bucket[]>('storage-buckets', () => $fetch('/api/storage/buckets', {
+    headers: {
+      Authorization: `Bearer ${token.value}`,
+    },
+  }))
 
   const buckets = computed(() => bucketData.value ?? [])
 
@@ -48,6 +53,9 @@ export function useStorage(bucket: Ref<string | undefined>, prefix: Ref<string>)
       }
       return $fetch('/api/storage/folders', {
         params: { bucket: bucket.value, prefix: prefix.value },
+        headers: {
+          Authorization: `Bearer ${token.value}`,
+        },
       })
     },
     { watch: [bucket, () => prefix.value] },
@@ -74,6 +82,9 @@ export function useStorage(bucket: Ref<string | undefined>, prefix: Ref<string>)
       }
       return $fetch('/api/storage/objects', {
         params: { bucket: bucket.value, prefix: prefix.value },
+        headers: {
+          Authorization: `Bearer ${token.value}`,
+        },
       })
     },
     { watch: [bucket, () => prefix.value] },
@@ -116,6 +127,9 @@ export function useStorage(bucket: Ref<string | undefined>, prefix: Ref<string>)
     
     await $fetch('/api/storage/delete', {
       method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token.value}`,
+      },
       body: { bucket: bucket.value, name: object.name },
     })
     
@@ -127,6 +141,9 @@ export function useStorage(bucket: Ref<string | undefined>, prefix: Ref<string>)
     
     await $fetch('/api/storage/delete', {
       method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token.value}`,
+      },
       body: { bucket: bucket.value, name: folder.path },
     })
     
@@ -142,6 +159,9 @@ export function useStorage(bucket: Ref<string | undefined>, prefix: Ref<string>)
         params: {
           bucket: bucket.value,
           objectName,
+        },
+        headers: {
+          Authorization: `Bearer ${token.value}`,
         },
       })
     } catch (error) {

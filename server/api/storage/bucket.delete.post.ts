@@ -1,6 +1,10 @@
 import { minio } from '../lib/minio'
+import { requireAdmin } from '../../lib/auth'
 
 export default defineEventHandler(async (event) => {
+  // Only admins can delete buckets
+  await requireAdmin(event)
+
   const body = await readBody<{ bucket?: string }>(event)
   const bucket = body?.bucket
 

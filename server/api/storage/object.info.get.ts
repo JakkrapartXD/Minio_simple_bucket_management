@@ -1,6 +1,10 @@
 import { minio } from '../lib/minio'
+import { requireAuth } from '../../lib/auth'
 
 export default defineEventHandler(async (event) => {
+  // All authenticated users can view object info
+  await requireAuth(event)
+
   const query = getQuery(event)
   const bucket = typeof query.bucket === 'string' ? query.bucket : undefined
   const objectName = typeof query.objectName === 'string' ? query.objectName : undefined
@@ -11,9 +15,9 @@ export default defineEventHandler(async (event) => {
 
   try {
     const stat = await minio.statObject(bucket, objectName)
-    
+
     // Get object tags if available
-    let tags: Record<string, string> = {}
+    let tags: any = {}
     try {
       tags = await minio.getObjectTagging(bucket, objectName)
     } catch (e) {
@@ -28,14 +32,11 @@ export default defineEventHandler(async (event) => {
       contentType: stat.metaData?.['content-type'] || stat.metaData?.['Content-Type'] || 'binary/octet-stream',
       metadata: stat.metaData || {},
       tags: tags || {},
-      legalHold: stat.legalHoldStatus || 'OFF',
-      retentionMode: stat.retentionMode || null,
-      retentionUntilDate: stat.retentionUntilDate || null,
     }
   } catch (error: any) {
-    throw createError({ 
-      statusCode: 500, 
-      statusMessage: error.message || 'Failed to get object info' 
+    throw createError({
+      statusCode: 500,
+      statusMessage: error.message || 'Failed to get object info'
     })
   }
 })

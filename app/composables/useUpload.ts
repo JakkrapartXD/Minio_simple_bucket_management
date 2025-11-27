@@ -13,6 +13,7 @@ export function useUpload(
   refreshObjects: () => Promise<void>,
   refreshFolders: () => Promise<void>,
 ) {
+  const { token } = useAuth()
   const fileInput = ref<HTMLInputElement>()
   const folderInput = ref<HTMLInputElement>()
   const dropzoneRef = ref<HTMLElement>()
@@ -91,6 +92,9 @@ export function useUpload(
     try {
       await $fetch('/api/storage/upload', {
         method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token.value}`,
+        },
         body: formData,
         params: {
           bucket: bucket.value,
@@ -175,6 +179,9 @@ export function useUpload(
             try {
               await $fetch('/api/storage/upload', {
                 method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${token.value}`,
+                },
                 body: formData,
                 params: {
                   bucket: bucket.value,

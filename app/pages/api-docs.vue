@@ -1,4 +1,8 @@
 <script setup>
+definePageMeta({
+  layout: 'dashboard',
+})
+
 useHead({
   title: 'API Documentation - Swagger UI',
   meta: [

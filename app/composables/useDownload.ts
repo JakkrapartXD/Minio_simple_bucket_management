@@ -11,6 +11,8 @@ interface DownloadItem {
 }
 
 export function useDownload(bucket: Ref<string | undefined>) {
+  const { token } = useAuth()
+
   /**
    * Download single file
    */
@@ -18,7 +20,11 @@ export function useDownload(bucket: Ref<string | undefined>) {
     if (!bucket.value) return
 
     try {
-      const response = await fetch(`/api/storage/download?bucket=${encodeURIComponent(bucket.value)}&objectName=${encodeURIComponent(objectName)}`)
+      const response = await fetch(`/api/storage/download?bucket=${encodeURIComponent(bucket.value)}&objectName=${encodeURIComponent(objectName)}`, {
+        headers: {
+          Authorization: `Bearer ${token.value}`,
+        },
+      })
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
@@ -56,6 +62,9 @@ export function useDownload(bucket: Ref<string | undefined>) {
           bucket: bucket.value,
           prefix: folderPath,
         },
+        headers: {
+          Authorization: `Bearer ${token.value}`,
+        },
       })
 
       return (response.objects || []).map((obj: any) => ({
@@ -83,7 +92,11 @@ export function useDownload(bucket: Ref<string | undefined>) {
         if (item.type === 'file') {
           // Download single file
           try {
-            const response = await fetch(`/api/storage/download?bucket=${encodeURIComponent(bucket.value)}&objectName=${encodeURIComponent(item.path)}`)
+            const response = await fetch(`/api/storage/download?bucket=${encodeURIComponent(bucket.value)}&objectName=${encodeURIComponent(item.path)}`, {
+              headers: {
+                Authorization: `Bearer ${token.value}`,
+              },
+            })
             
             if (!response.ok) {
               throw new Error(`HTTP error! status: ${response.status}`)
@@ -104,7 +117,11 @@ export function useDownload(bucket: Ref<string | undefined>) {
           
           for (const file of files) {
             try {
-              const response = await fetch(`/api/storage/download?bucket=${encodeURIComponent(bucket.value)}&objectName=${encodeURIComponent(file.path)}`)
+              const response = await fetch(`/api/storage/download?bucket=${encodeURIComponent(bucket.value)}&objectName=${encodeURIComponent(file.path)}`, {
+                headers: {
+                  Authorization: `Bearer ${token.value}`,
+                },
+              })
               
               if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`)

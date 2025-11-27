@@ -1,37 +1,94 @@
 # Minio Simple Bucket Management
 
-แอปนี้เป็นหน้า Dashboard สำหรับบริหารจัดการ MinIO object storage โดยเขียนด้วย Nuxt 4 + Nuxt UI
-ฟีเจอร์หลักที่เชื่อมต่อกับ API ฝั่งเซิร์ฟเวอร์แล้ว ได้แก่
+แอปนี้เป็นหน้า Dashboard สำหรับบริหารจัดการ MinIO object storage โดยเขียนด้วย Nuxt 4 + Nuxt UI  
+**อัปเดต:** ตอนนี้มีระบบ Authentication และ Role-based Access Control แล้ว!
 
+## ✨ ฟีเจอร์หลัก
+
+### 🔐 Authentication & Authorization
+- **ระบบ Login/Register** - ยืนยันตัวตนด้วย JWT และ bcrypt
+- **Role-based Access Control** - แบ่งสิทธิ์ Admin และ User
+  - **Admin**: เข้าถึงทุก bucket (public + private), สร้าง/ลบ bucket, แก้ไข policy
+  - **User**: เข้าถึงเฉพาะ bucket ที่เป็น public, ไม่สามารถสร้าง/ลบ bucket
+
+### 🪣 Bucket Management
 - รายการบักเก็ตทั้งหมด (เรียก `GET /api/storage/buckets`)
+- สร้างบักเก็ตใหม่ (`POST /api/storage/bucket.create`) - Admin เท่านั้น
+- ลบบักเก็ต (`POST /api/storage/bucket.delete`) - Admin เท่านั้น
+- ตั้งค่า Bucket Policy (Private/Public Read/Authenticated Read) - Admin เท่านั้น
+
+### 📁 Object Management
 - รายการโฟลเดอร์/ไฟล์ในแต่ละบักเก็ต (`GET /api/storage/folders`, `GET /api/storage/objects`)
-- สร้างบักเก็ตใหม่ผ่าน prompt (`POST /api/storage/bucket.create`)
-- อัปโหลดไฟล์ (`POST /api/storage/upload`)
+- อัปโหลดไฟล์/โฟลเดอร์ (`POST /api/storage/upload`)
+- ดาวน์โหลดไฟล์ (`GET /api/storage/download`)
 - ลบโฟลเดอร์หรือไฟล์ (`POST /api/storage/delete`)
 - ดูรายละเอียดไฟล์ (เมตาดาตา / ขนาด) (`GET /api/storage/object.info`)
+- แชร์ลิงก์ด้วย Presigned URL (`GET /api/storage/share`)
 
-## การติดตั้ง
+## 🔑 บัญชีผู้ใช้เริ่มต้น
 
-```bash
-pnpm install
-```
+### Admin
+- **Username:** `admin`
+- **Password:** `admin123`
+- **สิทธิ์:** เข้าถึงและจัดการทุกอย่าง
 
-## การรัน Dev Server
+### User  
+- **Username:** `user`
+- **Password:** `user123`
+- **สิทธิ์:** เข้าถึงเฉพาะ bucket ที่เป็น public
+
+## 📦 การติดตั้ง
+
+1. **ติดตั้ง dependencies:**
+   ```bash
+   pnpm install
+   ```
+
+2. **สร้าง RSA key pair สำหรับ JWT:**
+   ```bash
+   mkdir -p keys
+   ssh-keygen -t rsa -b 4096 -m PEM -f keys/jwt.key -N ""
+   openssl rsa -in keys/jwt.key -pubout -outform PEM -out keys/jwt.key.pub
+   ```
+   
+   ระบบจะสร้าง:
+   - `keys/jwt.key` - Private key (ใช้สำหรับ sign token)
+   - `keys/jwt.key.pub` - Public key (ใช้สำหรับ verify token)
+
+3. **ตั้งค่า environment variables:**
+   
+   สร้างไฟล์ `.env` และเพิ่ม:
+   ```bash
+   # MinIO Configuration
+   MINIO_ENDPOINT=127.0.0.1
+   MINIO_PORT=9000
+   MINIO_ACCESS_KEY=minioadmin
+   MINIO_SECRET_KEY=minioadmin
+   MINIO_PREVIEW_BASE=http://127.0.0.1:9000
+   
+   # Database Configuration
+   DATABASE_URL="file:./dev.db"
+   ```
+
+4. **Run database migrations:**
+   ```bash
+   npx prisma migrate dev
+   ```
+
+5. **Seed database with default users:**
+   ```bash
+   pnpm db:seed
+   ```
+
+## 🚀 การรัน Dev Server
 
 ```bash
 pnpm dev
 # เปิดที่ http://localhost:3000
 ```
 
-> อย่าลืมตั้งค่าตัวแปร MinIO ใน `.env` หรือ export ผ่าน shell เช่น
-
-```bash
-export MINIO_ENDPOINT=127.0.0.1
-export MINIO_PORT=9000
-export MINIO_ACCESS_KEY=minioadmin
-export MINIO_SECRET_KEY=minioadmin
-export MINIO_PREVIEW_BASE=http://127.0.0.1:9000
-```
+เมื่อเปิดแอป คุณจะถูก redirect ไปที่หน้า login  
+ใช้บัญชี admin หรือ user ตามที่ระบุด้านบนเพื่อเข้าสู่ระบบ
 
 ## การ build / preview production
 
@@ -40,8 +97,77 @@ pnpm build
 pnpm preview
 ```
 
-## โครงสร้างหน้า UI
+## 📂 โครงสร้างโปรเจค
 
-- `app/layouts/dashboard.vue` : sidebar + header โทน Earth tone พร้อม prompt สร้าง bucket
-- `app/pages/storage/[bucket]/index.vue` : Object Browser list, breadcrumb, upload, refresh
-- `server/api/storage/*` : API proxy สื่อสารกับ MinIO ผ่าน SDK
+### Frontend (app/)
+- `layouts/dashboard.vue` - Sidebar + Header (Earth tone theme) พร้อมแสดงข้อมูลผู้ใช้
+- `pages/login.vue` - หน้า Login
+- `pages/register.vue` - หน้า Register
+- `pages/storage/[bucket]/index.vue` - Object Browser (list, breadcrumb, upload, download)
+- `composables/useAuth.ts` - การจัดการ Authentication state
+- `composables/useStorage.ts` - การจัดการ Storage operations
+- `middleware/auth.global.ts` - Global authentication middleware
+
+### Backend (server/)
+- `api/auth/*` - Authentication endpoints (login, register, me)
+- `api/storage/*` - Storage API endpoints (bucket & object management)
+- `lib/auth.ts` - Authentication utilities (JWT, bcrypt)
+- `lib/prisma.ts` - Prisma client instance
+- `lib/bucket-access.ts` - Bucket access control logic
+- `lib/minio.ts` - MinIO client configuration
+
+### Database (prisma/)
+- `schema.prisma` - Database schema (User model)
+- `seed.ts` - Database seeder (default users)
+- `dev.db` - SQLite database file
+
+## 🛠️ Tech Stack
+
+- **Frontend:** Nuxt 4, Vue 3, Tailwind CSS, Nuxt UI
+- **Backend:** Nuxt Server API, MinIO SDK
+- **Database:** Prisma 5 + SQLite
+- **Authentication:** JWT + bcrypt
+- **Storage:** MinIO Object Storage
+
+## 📚 เอกสารเพิ่มเติม
+
+- [AUTH_SETUP.md](./AUTH_SETUP.md) - คู่มือการตั้งค่าระบบ Authentication
+- [IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md) - สรุปการทำงานของระบบ
+
+## 🔒 การรักษาความปลอดภัย
+
+⚠️ **สำคัญสำหรับ Production:**
+1. **เก็บ Private Key ให้ปลอดภัย** - ไฟล์ `keys/jwt.key` ต้องไม่ถูก commit ลง git และต้องเก็บเป็นความลับ
+2. **สร้าง Key Pair ใหม่** - ใช้ key pair ใหม่สำหรับแต่ละ environment (dev, staging, production)
+3. ใช้ **HTTPS** สำหรับการ deploy
+4. อัปเดต **dependencies** เป็นประจำ
+5. เพิ่ม **rate limiting** สำหรับ API
+6. เพิ่มการตรวจสอบ**ความแข็งแรงของรหัสผ่าน**
+
+### JWT Security
+ระบบใช้ **RSA-256 (RS256)** สำหรับการเข้ารหัส JWT:
+- ✅ มีความปลอดภัยสูงกว่า HS256 (HMAC with secret)
+- ✅ Private key ใช้สำหรับ sign token (เก็บใน server)
+- ✅ Public key ใช้สำหรับ verify token (สามารถแจกจ่ายได้)
+- ✅ เหมาะสำหรับ microservices architecture
+
+## 🎯 การทดสอบ
+
+### ทดสอบ Admin Access
+1. Login ด้วยบัญชี admin
+2. ควรเห็น bucket ทั้งหมด (public และ private)
+3. สามารถสร้าง/ลบ bucket ได้
+4. สามารถแก้ไข bucket policy ได้
+
+### ทดสอบ User Access
+1. Login ด้วยบัญชี user
+2. ควรเห็นแค่ bucket ที่เป็น public
+3. ไม่เห็นปุ่ม "Create Bucket"
+4. สามารถอัปโหลด/ดาวน์โหลดได้เฉพาะ public bucket
+
+## 📝 หมายเหตุ
+
+- ระบบใช้ SQLite เป็น database (ไฟล์ `prisma/dev.db`)
+- Token หมดอายุใน 7 วัน
+- User ใหม่ที่สมัครผ่าน /register จะได้ role เป็น USER
+- ต้องเข้าไปแก้ไขใน database เพื่อเปลี่ยน role เป็น ADMIN

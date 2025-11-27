@@ -1,6 +1,10 @@
 import { minio } from '../lib/minio'
+import { requireAuth } from '../../lib/auth'
 
 export default defineEventHandler(async (event) => {
+  // All authenticated users can view bucket policy
+  await requireAuth(event)
+
   const query = getQuery(event)
   const bucket = typeof query.bucket === 'string' ? query.bucket : undefined
 
@@ -10,29 +14,29 @@ export default defineEventHandler(async (event) => {
 
   try {
     const policy = await minio.getBucketPolicy(bucket)
-    
+
     // Parse policy JSON to determine policy type
     let policyType: 'private' | 'public-read' | 'authenticated-read' | 'custom' | null = null
-    
+
     if (policy) {
       try {
         const policyJson = JSON.parse(policy)
-        
+
         // Check if it's a deny policy (private)
         if (policyJson.Statement?.some((stmt: any) => stmt.Effect === 'Deny')) {
           policyType = 'private'
         }
         // Check if it's public read
-        else if (policyJson.Statement?.some((stmt: any) => 
-          stmt.Effect === 'Allow' && 
+        else if (policyJson.Statement?.some((stmt: any) =>
+          stmt.Effect === 'Allow' &&
           stmt.Principal?.AWS === '*' &&
           !stmt.Condition
         )) {
           policyType = 'public-read'
         }
         // Check if it's authenticated read
-        else if (policyJson.Statement?.some((stmt: any) => 
-          stmt.Effect === 'Allow' && 
+        else if (policyJson.Statement?.some((stmt: any) =>
+          stmt.Effect === 'Allow' &&
           stmt.Condition
         )) {
           policyType = 'authenticated-read'
@@ -44,9 +48,9 @@ export default defineEventHandler(async (event) => {
         policyType = 'custom'
       }
     }
-    
-    return { 
-      bucket, 
+
+    return {
+      bucket,
       policy: policy || null,
       policyType: policyType || 'private'
     }
@@ -55,7 +59,7 @@ export default defineEventHandler(async (event) => {
     if (error.code === 'NoSuchBucket' || error.code === 'NoSuchBucketPolicy') {
       return { bucket, policy: null, policyType: 'private' }
     }
-    
+
     throw createError({
       statusCode: 500,
       statusMessage: error.message || 'Failed to get bucket policy'

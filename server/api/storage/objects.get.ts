@@ -1,6 +1,10 @@
 import { minio } from '../lib/minio'
+import { requireAuth } from '../../lib/auth'
 
 export default defineEventHandler(async (event) => {
+  // All authenticated users can view objects
+  await requireAuth(event)
+
   const query = getQuery(event)
   const bucket = typeof query.bucket === 'string' ? query.bucket : undefined
   const prefix = typeof query.prefix === 'string' ? query.prefix : ''

@@ -22,3 +22,14 @@ logs
 .env
 .env.*
 !.env.example
+
+# Prisma
+/app/generated/prisma
+/prisma/dev.db
+/prisma/dev.db-journal
+/prisma/migrations
+
+# JWT Keys (keep private key secret!)
+keys/jwt.key
+# Public key can be shared but also ignored for security
+keys/jwt.key.pub
