@@ -1,12 +1,11 @@
 <script setup lang="ts">
-const router = useRouter()
 const { token, fetchUser, isAuthenticated } = useAuth()
 
 // Ensure user is authenticated
 await fetchUser()
 
 if (!isAuthenticated.value) {
-  router.replace('/login')
+  await navigateTo('/login', { replace: true })
 } else {
   const { data, pending } = await useAsyncData('buckets-initial', () =>
     $fetch('/api/storage/buckets', {
@@ -20,7 +19,7 @@ if (!isAuthenticated.value) {
     if (import.meta.client) {
       const buckets = data.value
       if (!pending.value && buckets && buckets.length > 0 && buckets[0]) {
-        router.replace(`/storage/${encodeURIComponent(buckets[0].name)}`)
+        navigateTo(`/storage/${encodeURIComponent(buckets[0].name)}`, { replace: true })
       }
     }
   })

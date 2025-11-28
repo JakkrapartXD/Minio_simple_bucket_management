@@ -88,6 +88,20 @@
           </ul>
         </nav>
   
+        <!-- Search Menu -->
+        <div class="px-2 mt-4">
+          <NuxtLink
+            to="/search"
+            class="flex items-center gap-3 px-4 py-2 rounded-lg text-sm transition"
+            :class="route.path === '/search'
+              ? 'bg-[#8D6E63] text-white shadow-md'
+              : 'text-[#D7CCC8] hover:bg-[#6D4C41]/60 hover:text-white'"
+          >
+            <Icon name="heroicons:magnifying-glass" class="h-5 w-5" />
+            <span>Search Files</span>
+          </NuxtLink>
+        </div>
+
         <!-- Footer -->
         <div class="border-t border-[#6D4C41] px-4 py-3 text-sm text-[#A1887F] space-y-1">
           <NuxtLink to="/api-docs" class="w-full text-left hover:text-[#D7CCC8] block px-2 py-1">
@@ -362,14 +376,17 @@
   const buckets = computed(() => bucketData.value ?? [])
 
   watchEffect(() => {
-    if (!bucketsPending.value && buckets.value.length) {
+    // Only auto-redirect if we're on a storage page
+    const isStoragePage = route.path.startsWith('/storage')
+    
+    if (!bucketsPending.value && buckets.value.length && isStoragePage) {
       const firstBucket = buckets.value[0]
       if (!selectedBucket.value && firstBucket) {
-        router.replace(`/storage/${encodeURIComponent(firstBucket.name)}`)
+        navigateTo(`/storage/${encodeURIComponent(firstBucket.name)}`, { replace: true })
       } else if (selectedBucket.value) {
         const exists = buckets.value.some((bucket) => bucket.name === selectedBucket.value)
         if (!exists && firstBucket) {
-          router.replace(`/storage/${encodeURIComponent(firstBucket.name)}`)
+          navigateTo(`/storage/${encodeURIComponent(firstBucket.name)}`, { replace: true })
         }
       }
     }

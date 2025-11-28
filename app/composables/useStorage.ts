@@ -99,7 +99,7 @@ export function useStorage(bucket: Ref<string | undefined>, prefix: Ref<string>)
 
   // Navigation
   const handleNavigate = (nextPrefix: string) => {
-    router.replace({ query: { prefix: nextPrefix } })
+    navigateTo({ query: { prefix: nextPrefix } }, { replace: true })
   }
 
   const handleSelectBucket = (name: string) => {
@@ -124,7 +124,7 @@ export function useStorage(bucket: Ref<string | undefined>, prefix: Ref<string>)
   // Delete operations
   const handleDeleteObject = async (object: ObjectEntry) => {
     if (!bucket.value) return
-    
+
     await $fetch('/api/storage/delete', {
       method: 'POST',
       headers: {
@@ -132,13 +132,13 @@ export function useStorage(bucket: Ref<string | undefined>, prefix: Ref<string>)
       },
       body: { bucket: bucket.value, name: object.name },
     })
-    
+
     await refreshObjects()
   }
 
   const handleDeleteFolder = async (folder: { path: string }) => {
     if (!bucket.value) return
-    
+
     await $fetch('/api/storage/delete', {
       method: 'POST',
       headers: {
@@ -146,14 +146,14 @@ export function useStorage(bucket: Ref<string | undefined>, prefix: Ref<string>)
       },
       body: { bucket: bucket.value, name: folder.path },
     })
-    
+
     await Promise.all([refreshFolders(), refreshObjects()])
   }
 
   // Object info
   const getObjectInfo = async (objectName: string) => {
     if (!bucket.value) return null
-    
+
     try {
       return await $fetch('/api/storage/object.info', {
         params: {

@@ -394,7 +394,7 @@ watchEffect(() => {
   if (!bucketsPending.value && buckets.value.length && selectedBucket.value) {
     const exists = buckets.value.some((bucket) => bucket.name === selectedBucket.value)
     if (!exists && buckets.value[0]) {
-      router.replace(`/storage/${encodeURIComponent(buckets.value[0].name)}`)
+      navigateTo(`/storage/${encodeURIComponent(buckets.value[0].name)}`, { replace: true })
     }
   }
 })

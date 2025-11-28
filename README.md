@@ -19,11 +19,19 @@
 
 ### 📁 Object Management
 - รายการโฟลเดอร์/ไฟล์ในแต่ละบักเก็ต (`GET /api/storage/folders`, `GET /api/storage/objects`)
-- อัปโหลดไฟล์/โฟลเดอร์ (`POST /api/storage/upload`)
+- **อัปโหลดผ่าน Presigned URL** - อัปโหลดไฟล์โดยตรงไปยัง MinIO (`POST /api/storage/presigned-upload`)
 - ดาวน์โหลดไฟล์ (`GET /api/storage/download`)
 - ลบโฟลเดอร์หรือไฟล์ (`POST /api/storage/delete`)
 - ดูรายละเอียดไฟล์ (เมตาดาตา / ขนาด) (`GET /api/storage/object.info`)
 - แชร์ลิงก์ด้วย Presigned URL (`GET /api/storage/share`)
+
+### 🔍 File Search (NEW!)
+- **Full-text Search** - ค้นหาไฟล์ด้วยชื่อหรือเนื้อหาภายในไฟล์
+- **Elasticsearch Integration** - ระบบจัดทำดัชนีไฟล์อัตโนมัติผ่าน webhook
+- **Content Extraction** - แยกข้อความจาก PDF, DOCX, XLSX, และไฟล์อื่นๆ
+- **Google-like Interface** - หน้าค้นหาที่ใช้งานง่าย พร้อม highlight ผลลัพธ์
+- **Smart Indexing** - ไฟล์เล็ก (<10MB) จะถูกแยกเนื้อหาเต็มรูปแบบ, ไฟล์ใหญ่จะเก็บเฉพาะ metadata
+
 
 ## 🔑 บัญชีผู้ใช้เริ่มต้น
 
@@ -39,12 +47,19 @@
 
 ## 📦 การติดตั้ง
 
-1. **ติดตั้ง dependencies:**
+1. **เริ่มต้น Docker services (MinIO, Elasticsearch, Kibana):**
+   ```bash
+   docker compose up -d
+   ```
+   
+   รอประมาณ 30 วินาทีให้ services พร้อมใช้งาน
+
+2. **ติดตั้ง dependencies:**
    ```bash
    pnpm install
    ```
 
-2. **สร้าง RSA key pair สำหรับ JWT:**
+3. **สร้าง RSA key pair สำหรับ JWT:**
    ```bash
    mkdir -p keys
    ssh-keygen -t rsa -b 4096 -m PEM -f keys/jwt.key -N ""
@@ -55,30 +70,41 @@
    - `keys/jwt.key` - Private key (ใช้สำหรับ sign token)
    - `keys/jwt.key.pub` - Public key (ใช้สำหรับ verify token)
 
-3. **ตั้งค่า environment variables:**
+4. **ตั้งค่า environment variables:**
    
    สร้างไฟล์ `.env` และเพิ่ม:
    ```bash
    # MinIO Configuration
    MINIO_ENDPOINT=127.0.0.1
-   MINIO_PORT=9000
-   MINIO_ACCESS_KEY=minioadmin
-   MINIO_SECRET_KEY=minioadmin
-   MINIO_PREVIEW_BASE=http://127.0.0.1:9000
+   MINIO_PORT=9005
+   MINIO_ACCESS_KEY=b
+   MINIO_SECRET_KEY=bbb
+   MINIO_PREVIEW_BASE=http://127.0.0.1:9005
+   
+   # Elasticsearch Configuration
+   ELASTICSEARCH_URL=http://localhost:9200
    
    # Database Configuration
    DATABASE_URL="file:./dev.db"
    ```
 
-4. **Run database migrations:**
+5. **Run database migrations:**
    ```bash
    npx prisma migrate dev
    ```
 
-5. **Seed database with default users:**
+6. **Seed database with default users:**
    ```bash
    pnpm db:seed
    ```
+
+7. **ตั้งค่า MinIO Webhook (สำหรับ file indexing):**
+   ```bash
+   ./scripts/setup-webhook.sh
+   ```
+   
+   ดูรายละเอียดเพิ่มเติมใน [Setup Guide](./scripts/setup-webhook.sh)
+
 
 ## 🚀 การรัน Dev Server
 
@@ -128,6 +154,35 @@ pnpm preview
 - **Database:** Prisma 5 + SQLite
 - **Authentication:** JWT + bcrypt
 - **Storage:** MinIO Object Storage
+- **Search:** Elasticsearch 8 + Attachment Processor
+- **Monitoring:** Kibana (http://localhost:5601)
+
+## 📂 โครงสร้างโปรเจค (อัปเดต)
+
+### Frontend (app/)
+- `pages/search.vue` - **NEW!** หน้าค้นหาไฟล์แบบ Google
+- `layouts/dashboard.vue` - Sidebar + Header พร้อมเมนู Search Files
+- `pages/login.vue` - หน้า Login
+- `pages/register.vue` - หน้า Register
+- `pages/storage/[bucket]/index.vue` - Object Browser
+- `composables/useAuth.ts` - การจัดการ Authentication state
+- `composables/useStorage.ts` - การจัดการ Storage operations
+- `composables/useUpload.ts` - **อัปเดต!** ใช้ Presigned URL แทน direct upload
+
+### Backend (server/)
+- `api/search/*` - **NEW!** Search API endpoints
+- `api/webhook/*` - **NEW!** MinIO webhook receiver
+- `api/storage/presigned-upload.post.ts` - **NEW!** Presigned URL generation
+- `api/auth/*` - Authentication endpoints
+- `api/storage/*` - Storage API endpoints
+- `lib/elasticsearch.ts` - **NEW!** Elasticsearch client
+- `lib/file-indexer.ts` - **NEW!** File indexing service
+- `lib/auth.ts` - Authentication utilities
+- `lib/prisma.ts` - Prisma client
+- `lib/bucket-access.ts` - Bucket access control
+- `lib/minio.ts` - MinIO client
+- `plugins/elasticsearch.ts` - **NEW!** Elasticsearch initialization
+
 
 ## 📚 เอกสารเพิ่มเติม
 

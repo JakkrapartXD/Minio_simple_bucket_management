@@ -32,7 +32,7 @@ export function useUpload(
         fileEntry.file((file) => {
           const fileNameOnly = file.name.split('/').pop() || file.name.split('\\').pop() || file.name
           const relativePath = basePath ? `${basePath}/${fileNameOnly}` : fileNameOnly
-          
+
           const newFile = new File([file], fileNameOnly, {
             type: file.type,
             lastModified: file.lastModified,
@@ -78,30 +78,63 @@ export function useUpload(
   }
 
   /**
-   * อัพโหลดไฟล์
+   * อัพโหลดไฟล์ผ่าน presigned URL
    */
   const uploadFiles = async (files: FileList | File[]) => {
     if (!files || !files.length || !bucket.value) return
 
-    const formData = new FormData()
-    Array.from(files).forEach((file) => {
-      const fileName = (file as any).webkitRelativePath || file.name
-      formData.append('files', file, fileName)
-    })
-
     try {
-      await $fetch('/api/storage/upload', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token.value}`,
-        },
-        body: formData,
-        params: {
-          bucket: bucket.value,
-          prefix: prefix.value || '',
-        },
-      })
-      window.alert('Upload complete')
+      const fileArray = Array.from(files)
+      let successCount = 0
+      let failCount = 0
+
+      for (const file of fileArray) {
+        try {
+          // Get relative path for folder uploads
+          const fileName = (file as any).webkitRelativePath || file.name
+          const objectKey = prefix.value ? `${prefix.value}${fileName}` : fileName
+
+          // 1. Request presigned URL from backend
+          const presignedData = await $fetch('/api/storage/presigned-upload', {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token.value}`,
+            },
+            body: {
+              bucket: bucket.value,
+              objectKey,
+              contentType: file.type || 'application/octet-stream',
+            },
+          })
+
+          // 2. Upload file directly to MinIO using presigned URL
+          const uploadResponse = await fetch(presignedData.presignedUrl, {
+            method: 'PUT',
+            body: file,
+            headers: {
+              'Content-Type': file.type || 'application/octet-stream',
+            },
+          })
+
+          if (!uploadResponse.ok) {
+            throw new Error(`Upload failed: ${uploadResponse.statusText}`)
+          }
+
+          successCount++
+        } catch (error: any) {
+          console.error(`Failed to upload ${file.name}:`, error)
+          failCount++
+        }
+      }
+
+      // Show result
+      if (failCount === 0) {
+        window.alert(`Upload complete: ${successCount} file(s) uploaded`)
+      } else {
+        window.alert(`Upload completed with errors: ${successCount} succeeded, ${failCount} failed`)
+      }
+
+      // Refresh file list
       await Promise.all([refreshObjects(), refreshFolders()])
     } catch (error: any) {
       console.error('Upload error:', error)
@@ -109,6 +142,7 @@ export function useUpload(
       window.alert('Upload failed: ' + errorMessage)
     }
   }
+
 
   /**
    * จัดการ drag over event
